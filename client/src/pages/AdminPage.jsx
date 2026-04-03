@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAdmin } from '../AdminContext.jsx';
 import * as XLSX from 'xlsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 function AdminPage() {
-  const [password, setPassword] = useState(sessionStorage.getItem('adminPw') || '');
+  const [password, setPassword] = useState(localStorage.getItem('adminPw') || '');
   const [authed, setAuthed] = useState(false);
+  const navigate = useNavigate();
+  const { login: adminLogin, logout: adminLogout } = useAdmin();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -194,14 +198,26 @@ function AdminPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await fetch(`${API_BASE}/api/admin/members`, { headers: headers() });
-    setLoading(false);
-    if (res.ok) {
-      sessionStorage.setItem('adminPw', password);
-      setMembers(await res.json());
-      setAuthed(true);
-    } else {
-      setError('密碼錯誤');
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000);
+      const res = await fetch(`${API_BASE}/api/admin/members`, { headers: headers(), signal: controller.signal });
+      clearTimeout(timer);
+      setLoading(false);
+      if (res.ok) {
+        adminLogin(password);
+        setMembers(await res.json());
+        setAuthed(true);
+      } else {
+        setError('密碼錯誤');
+      }
+    } catch (err) {
+      setLoading(false);
+      if (err.name === 'AbortError') {
+        setError('伺服器回應逾時，請再試一次（伺服器可能正在喚醒）');
+      } else {
+        setError('連線失敗，請稍後再試');
+      }
     }
   }
 
@@ -306,8 +322,9 @@ function AdminPage() {
             />
             {error && <p style={{ color: '#dc2626', fontSize: '0.85rem' }}>{error}</p>}
             <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? '驗證中...' : '進入後台'}
+              {loading ? '驗證中（最多等待 60 秒）...' : '進入後台'}
             </button>
+            {loading && <p style={{ color: '#9ca3af', fontSize: '0.78rem', textAlign: 'center' }}>伺服器首次啟動可能需要 30～60 秒，請耐心等候</p>}
           </form>
         </section>
       </div>
@@ -320,6 +337,12 @@ function AdminPage() {
         <div className="reg-header">
           <span className="reg-header-tag">Admin</span>
           <h2>會員管理</h2>
+          <button
+            onClick={() => navigate('/')}
+            style={{ marginBottom: '0.5rem', padding: '0.4rem 0.9rem', border: '1.5px solid #a5b4fc', borderRadius: '6px', background: '#eef2ff', color: '#4f46e5', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}
+          >
+            ← 前往主頁編輯
+          </button>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -490,6 +513,15 @@ function AdminPage() {
                         {m.company && <span style={{ marginRight: '0.6rem' }}>🏢 {m.company}</span>}
                         加入：{new Date(m.createdAt).toLocaleDateString('zh-TW')}
                       </p>
+                      {m.registrations && m.registrations.length > 0 && (
+                        <div style={{ marginTop: '0.3rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          {m.registrations.map((r, i) => (
+                            <span key={i} style={{ fontSize: '0.7rem', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '0.1rem 0.45rem' }}>
+                              📋 {r.eventTitle ? r.eventTitle.split('\n')[0].substring(0, 20) + (r.eventTitle.length > 20 ? '…' : '') : '活動'}{r.eventDate ? ` · ${r.eventDate}` : ''} · {r.attended}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
                       <button
@@ -569,7 +601,7 @@ function AdminPage() {
         </div>
 
         <button
-          onClick={() => { sessionStorage.removeItem('adminPw'); setAuthed(false); }}
+          onClick={() => { adminLogout(); setAuthed(false); }}
           style={{ marginTop: '1.5rem', width: '100%', padding: '0.6rem', border: '1.5px solid #e5e7eb', borderRadius: '8px', background: 'transparent', color: '#6b7280', cursor: 'pointer', fontWeight: 600 }}
         >
           登出後台

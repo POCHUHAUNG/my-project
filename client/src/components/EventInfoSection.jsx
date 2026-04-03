@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ImageUpload from './ImageUpload';
 import { useEventId } from '../hooks/useEventId';
+import { useAdmin } from '../AdminContext.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
@@ -77,6 +78,7 @@ function EventInfoSection() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { isAdmin } = useAdmin();
 
   useEffect(() => {
     fetch(`${API_BASE}/api/event?eventId=${eventId}`)
@@ -107,45 +109,49 @@ function EventInfoSection() {
           {event.description && (
             <p className="event-description">{event.description}</p>
           )}
-          <div className="upload-row">
-            <ImageUploadPersist
-              label={event.imageUrl ? '更新主視覺圖片' : '上傳主視覺圖片'}
-              currentUrl={event.imageUrl}
-              onUploaded={async (url) => {
-                setEvent((p) => ({ ...p, imageUrl: url }));
-                await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ imageUrl: url }),
-                });
-              }}
-            />
-            <ImageUploadPersist
-              label={event.dmUrl ? '更新課程 DM' : '上傳課程 DM'}
-              currentUrl={event.dmUrl}
-              onUploaded={async (url) => {
-                setEvent((p) => ({ ...p, dmUrl: url }));
-                await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ dmUrl: url }),
-                });
-              }}
-            />
-          </div>
+          {isAdmin && (
+            <div className="upload-row">
+              <ImageUploadPersist
+                label={event.imageUrl ? '更新主視覺圖片' : '上傳主視覺圖片'}
+                currentUrl={event.imageUrl}
+                onUploaded={async (url) => {
+                  setEvent((p) => ({ ...p, imageUrl: url }));
+                  await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl: url }),
+                  });
+                }}
+              />
+              <ImageUploadPersist
+                label={event.dmUrl ? '更新課程 DM' : '上傳課程 DM'}
+                currentUrl={event.dmUrl}
+                onUploaded={async (url) => {
+                  setEvent((p) => ({ ...p, dmUrl: url }));
+                  await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dmUrl: url }),
+                  });
+                }}
+              />
+            </div>
+          )}
 
-          <AgendaLabelEditor
-            tagEn={event.agendaTagEn || 'Schedule'}
-            tagZh={event.agendaTagZh || '活動議程'}
-            onSave={async (agendaTagEn, agendaTagZh) => {
-              setEvent((p) => ({ ...p, agendaTagEn, agendaTagZh }));
-              await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ agendaTagEn, agendaTagZh }),
-              });
-            }}
-          />
+          {isAdmin && (
+            <AgendaLabelEditor
+              tagEn={event.agendaTagEn || 'Schedule'}
+              tagZh={event.agendaTagZh || '活動議程'}
+              onSave={async (agendaTagEn, agendaTagZh) => {
+                setEvent((p) => ({ ...p, agendaTagEn, agendaTagZh }));
+                await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ agendaTagEn, agendaTagZh }),
+                });
+              }}
+            />
+          )}
         </div>
       </section>
 

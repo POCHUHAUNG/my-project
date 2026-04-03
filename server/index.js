@@ -365,7 +365,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// GET /api/admin/members — 取得所有會員（含公司）
+// GET /api/admin/members — 取得所有會員（含公司、報名課程）
 app.get('/api/admin/members', requireAdmin, async (req, res) => {
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
   try {
@@ -373,22 +373,33 @@ app.get('/api/admin/members', requireAdmin, async (req, res) => {
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
     const auth = new (require('googleapis').google.auth.GoogleAuth)({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = require('googleapis').google.sheets({ version: 'v4', auth });
-    const sheetRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `registrations-${eventId}!A2:F`,
-    });
-    // Build email → company map (last registration wins)
-    const companyMap = {};
-    (sheetRes.data.values || []).forEach((row) => {
+
+    const [regRes, eventRes] = await Promise.all([
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: `registrations-${eventId}!A2:I` }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: `event-info-${eventId}!A2:B2` }),
+    ]);
+
+    const eventRows = eventRes.data.values || [];
+    const eventTitle = (eventRows[0] && eventRows[0][0]) || '';
+    const eventDate = (eventRows[0] && eventRows[0][1]) || '';
+
+    // Build email → { company, registrations[] } map
+    const emailMap = {};
+    (regRes.data.values || []).forEach((row) => {
       const email = row[3] || '';
       const company = row[5] || '';
-      if (email) companyMap[email] = company;
+      const attended = row[7] || '待確認';
+      if (!email) return;
+      if (!emailMap[email]) emailMap[email] = { company, registrations: [] };
+      emailMap[email].company = company;
+      emailMap[email].registrations.push({ eventTitle, eventDate, attended, submittedAt: row[0] || '' });
     });
 
     const members = await memberStore.readMembers();
     res.json(members.map(({ passwordHash, setPasswordToken, setPasswordTokenExpiry, ...m }) => ({
       ...m,
-      company: companyMap[m.email] || '',
+      company: (emailMap[m.email] && emailMap[m.email].company) || '',
+      registrations: (emailMap[m.email] && emailMap[m.email].registrations) || [],
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
