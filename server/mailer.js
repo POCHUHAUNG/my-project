@@ -13,8 +13,8 @@ function createTransporter() {
 }
 
 async function sendSetPasswordEmail(toEmail, token) {
-  const port = process.env.PORT || 3001;
-  const link = `http://localhost:${port}/set-password?token=${token}`;
+  const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+  const link = `${clientOrigin}/set-password?token=${token}`;
   const transporter = createTransporter();
   await transporter.sendMail({
     from: `"活動報名系統" <${process.env.EMAIL_USER}>`,
