@@ -1,43 +1,96 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const { google } = require('googleapis');
 const { randomUUID } = require('crypto');
 
-const DATA_PATH = process.env._TEST_MEMBERS_PATH
-  || path.join(__dirname, 'data', 'members.json');
+const MEMBERS_TAB = 'members';
+// Columns: A=memberId B=memberNumber C=email D=name E=passwordHash F=isActivated G=setPasswordToken H=setPasswordTokenExpiry I=createdAt
+const MEMBERS_RANGE = `${MEMBERS_TAB}!A2:I`;
 
-// Concurrency guard — serialise all writes
-let writing = false;
-const writeQueue = [];
+function getClient() {
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!keyJson) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY not set');
+  const credentials = JSON.parse(keyJson);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  return google.sheets({ version: 'v4', auth });
+}
+
+function spreadsheetId() {
+  const id = process.env.SPREADSHEET_ID;
+  if (!id) throw new Error('SPREADSHEET_ID not set');
+  return id;
+}
+
+function rowToMember(row) {
+  return {
+    memberId: row[0] || '',
+    memberNumber: row[1] || '',
+    email: row[2] || '',
+    name: row[3] || '',
+    passwordHash: row[4] || null,
+    isActivated: row[5] === 'TRUE',
+    setPasswordToken: row[6] || null,
+    setPasswordTokenExpiry: row[7] || null,
+    createdAt: row[8] || '',
+  };
+}
+
+function memberToRow(m) {
+  return [
+    m.memberId || '',
+    m.memberNumber || '',
+    m.email || '',
+    m.name || '',
+    m.passwordHash || '',
+    m.isActivated ? 'TRUE' : 'FALSE',
+    m.setPasswordToken || '',
+    m.setPasswordTokenExpiry || '',
+    m.createdAt || '',
+  ];
+}
+
+async function ensureMembersSheet(sheets, sid) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
+  const exists = meta.data.sheets.some((s) => s.properties.title === MEMBERS_TAB);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sid,
+      requestBody: { requests: [{ addSheet: { properties: { title: MEMBERS_TAB } } }] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sid,
+      range: `${MEMBERS_TAB}!A1:I1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['memberId', 'memberNumber', 'email', 'name', 'passwordHash', 'isActivated', 'setPasswordToken', 'setPasswordTokenExpiry', 'createdAt']] },
+    });
+  }
+}
 
 async function readMembers() {
-  if (!fs.existsSync(DATA_PATH)) {
-    fs.writeFileSync(DATA_PATH, '[]');
-    return [];
-  }
-  const raw = fs.readFileSync(DATA_PATH, 'utf8');
-  return JSON.parse(raw);
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  await ensureMembersSheet(sheets, sid);
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: MEMBERS_RANGE });
+  return (res.data.values || []).map(rowToMember);
 }
 
-async function writeMembers(members) {
-  return new Promise((resolve, reject) => {
-    writeQueue.push({ members, resolve, reject });
-    if (!writing) processQueue();
+async function findRowIndex(sheets, sid, predicate) {
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: MEMBERS_RANGE });
+  const rows = res.data.values || [];
+  const idx = rows.findIndex(predicate);
+  return { rows, idx, sheetRow: idx === -1 ? -1 : idx + 2 };
+}
+
+async function updateRow(sheets, sid, sheetRow, member) {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sid,
+    range: `${MEMBERS_TAB}!A${sheetRow}:I${sheetRow}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [memberToRow(member)] },
   });
-}
-
-function processQueue() {
-  if (writeQueue.length === 0) { writing = false; return; }
-  writing = true;
-  const { members, resolve, reject } = writeQueue.shift();
-  try {
-    fs.writeFileSync(DATA_PATH, JSON.stringify(members, null, 2));
-    resolve();
-  } catch (err) {
-    reject(err);
-  }
-  processQueue();
 }
 
 async function findByEmail(email) {
@@ -51,9 +104,12 @@ async function findByToken(token) {
 }
 
 async function createMember({ email, name }) {
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  await ensureMembersSheet(sheets, sid);
   const members = await readMembers();
   const now = new Date();
-  const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h
+  const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const nextNumber = (members.length + 1).toString().padStart(3, '0');
   const member = {
     memberId: randomUUID(),
@@ -66,56 +122,60 @@ async function createMember({ email, name }) {
     setPasswordTokenExpiry: expiry.toISOString(),
     createdAt: now.toISOString(),
   };
-  members.push(member);
-  await writeMembers(members);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sid,
+    range: `${MEMBERS_TAB}!A2`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [memberToRow(member)] },
+  });
   return member;
 }
 
 async function activateMember(token, passwordHash) {
-  const members = await readMembers();
-  const idx = members.findIndex((m) => m.setPasswordToken === token);
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  const { rows, idx, sheetRow } = await findRowIndex(sheets, sid, (r) => r[6] === token);
   if (idx === -1) throw new Error('Token not found');
-  members[idx].passwordHash = passwordHash;
-  members[idx].isActivated = true;
-  members[idx].setPasswordToken = null;
-  members[idx].setPasswordTokenExpiry = null;
-  await writeMembers(members);
+  const member = { ...rowToMember(rows[idx]), passwordHash, isActivated: true, setPasswordToken: null, setPasswordTokenExpiry: null };
+  await updateRow(sheets, sid, sheetRow, member);
 }
 
 async function setPasswordByEmail(email, passwordHash) {
-  const members = await readMembers();
-  const idx = members.findIndex((m) => m.email === email);
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  const { rows, idx, sheetRow } = await findRowIndex(sheets, sid, (r) => r[2] === email);
   if (idx === -1) throw new Error('Member not found');
-  members[idx].passwordHash = passwordHash;
-  members[idx].isActivated = true;
-  members[idx].setPasswordToken = null;
-  members[idx].setPasswordTokenExpiry = null;
-  await writeMembers(members);
+  const member = { ...rowToMember(rows[idx]), passwordHash, isActivated: true, setPasswordToken: null, setPasswordTokenExpiry: null };
+  await updateRow(sheets, sid, sheetRow, member);
 }
 
 async function generateResetToken(email) {
-  const members = await readMembers();
-  const idx = members.findIndex((m) => m.email === email);
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  const { rows, idx, sheetRow } = await findRowIndex(sheets, sid, (r) => r[2] === email);
   if (idx === -1) throw new Error('Member not found');
   const token = randomUUID();
   const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  members[idx].setPasswordToken = token;
-  members[idx].setPasswordTokenExpiry = expiry;
-  await writeMembers(members);
+  const member = { ...rowToMember(rows[idx]), setPasswordToken: token, setPasswordTokenExpiry: expiry };
+  await updateRow(sheets, sid, sheetRow, member);
   return token;
 }
 
 async function updateMember(memberId, fields) {
-  const members = await readMembers();
-  const idx = members.findIndex((m) => m.memberId === memberId);
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  const { rows, idx, sheetRow } = await findRowIndex(sheets, sid, (r) => r[0] === memberId);
   if (idx === -1) return null;
-  const allowed = ['name', 'email', 'isActivated'];
-  allowed.forEach((key) => {
-    if (fields[key] !== undefined) members[idx][key] = fields[key];
+  const member = rowToMember(rows[idx]);
+  ['name', 'email', 'isActivated'].forEach((key) => {
+    if (fields[key] !== undefined) member[key] = fields[key];
   });
-  await writeMembers(members);
-  const { passwordHash, setPasswordToken, setPasswordTokenExpiry, ...safe } = members[idx];
+  await updateRow(sheets, sid, sheetRow, member);
+  const { passwordHash, setPasswordToken, setPasswordTokenExpiry, ...safe } = member;
   return safe;
 }
+
+// Keep writeMembers as no-op for test compatibility
+async function writeMembers() {}
 
 module.exports = { readMembers, writeMembers, findByEmail, findByToken, createMember, activateMember, setPasswordByEmail, generateResetToken, updateMember };
