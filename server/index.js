@@ -16,14 +16,14 @@ function getLocalIP() {
   }
   return 'localhost';
 }
-const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, updateEventImages, markAttended, getRegistrationByToken, initializeSheets } = require('./sheets');
+const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets } = require('./sheets');
 const memberStore = require('./memberStore');
 const { signToken, requireAuth } = require('./auth');
 
 function isStrongPassword(pw) {
   return pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
 }
-const { sendSetPasswordEmail, sendResetPasswordEmail, sendRegistrationConfirmationEmail, sendOrganizerNotificationEmail, sendEventCancelNotificationEmail, sendEventChangeNotificationEmail } = require('./mailer');
+const { sendSetPasswordEmail, sendResetPasswordEmail, sendRegistrationConfirmationEmail, sendOrganizerNotificationEmail, sendEventCancelNotificationEmail, sendEventChangeNotificationEmail, sendPreEventReminderEmail } = require('./mailer');
 
 function generateTempPassword() {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -105,7 +105,7 @@ app.get('/api/agenda', async (req, res) => {
 
 // POST /api/register — 寫入報名資料，並自動建立會員帳號
 app.post('/api/register', async (req, res) => {
-  const { name, email, phone, company, lineId } = req.body;
+  const { name, email, phone, company, lineUserId } = req.body;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
 
   const missing = [];
@@ -113,7 +113,7 @@ app.post('/api/register', async (req, res) => {
   if (!email) missing.push('email');
   if (!phone) missing.push('phone');
   if (!company) missing.push('company');
-  if (!lineId) missing.push('lineId');
+  if (!lineUserId) missing.push('lineUserId');
 
   if (missing.length > 0) {
     return res.status(400).json({ error: 'Missing required fields', missing });
@@ -134,7 +134,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     // 2. Append registration to Sheets
-    await appendRegistration({ name, email, phone, company, lineId, memberNumber: member.memberNumber || '' }, eventId);
+    await appendRegistration({ name, email, phone, company, lineUserId, memberNumber: member.memberNumber || '' }, eventId);
 
     // 3. Try sending emails (non-fatal if fails)
     if (process.env.EMAIL_USER) {
@@ -164,7 +164,7 @@ app.post('/api/register', async (req, res) => {
 
       // 報名通知信 → 給主辦單位
       try {
-        await sendOrganizerNotificationEmail({ name, email, phone, company, lineId, memberNumber: member.memberNumber || '', eventTitle });
+        await sendOrganizerNotificationEmail({ name, email, phone, company, lineId: lineUserId, memberNumber: member.memberNumber || '', eventTitle });
       } catch (mailErr) {
         console.error('Organizer notification email failed (non-fatal):', mailErr.message);
       }
@@ -231,6 +231,37 @@ app.post('/api/auth/set-password', async (req, res) => {
 });
 
 // POST /api/auth/login — 登入
+// POST /api/auth/line/callback — LINE Login OAuth: exchange code for lineUserId
+app.post('/api/auth/line/callback', async (req, res) => {
+  const { code, redirectUri } = req.body;
+  if (!code || !redirectUri) return res.status(400).json({ error: 'Missing code or redirectUri' });
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: process.env.LINE_LOGIN_CLIENT_ID,
+      client_secret: process.env.LINE_LOGIN_CLIENT_SECRET,
+    });
+    const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    if (!tokenRes.ok) return res.status(400).json({ error: 'LINE authorization failed' });
+    const { access_token } = await tokenRes.json();
+    const profileRes = await fetch('https://api.line.me/v2/profile', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    if (!profileRes.ok) return res.status(400).json({ error: 'LINE authorization failed' });
+    const { userId, displayName } = await profileRes.json();
+    res.json({ lineUserId: userId, displayName });
+  } catch (err) {
+    console.error('POST /api/auth/line/callback error:', err.message);
+    res.status(400).json({ error: 'LINE authorization failed' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -539,6 +570,43 @@ app.post('/api/admin/notify-event-change', requireAdmin, async (req, res) => {
     res.json({ queued: emails.length });
   } catch (err) {
     console.error('POST /api/admin/notify-event-change error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/notify-pre-event — 課前通知：同時發送 Email 和 LINE 推播給所有報名者
+app.post('/api/admin/notify-pre-event', requireAdmin, async (req, res) => {
+  const { title, message, channels = [] } = req.body;
+  if (!title || !message) return res.status(400).json({ error: 'Missing title or message' });
+  if (!Array.isArray(channels) || channels.length === 0) return res.status(400).json({ error: 'Missing channels' });
+
+  try {
+    const registrations = await getAllRegistrations();
+    let emailCount = 0;
+    let lineCount = 0;
+
+    if (channels.includes('email') && process.env.EMAIL_USER) {
+      const emails = [...new Set(registrations.map((r) => r.email).filter(Boolean))];
+      emailCount = emails.length;
+      Promise.allSettled(
+        emails.map((email) => sendPreEventReminderEmail(email, { title, message }))
+      ).then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected');
+        if (failed.length > 0) console.error(`notify-pre-event: ${failed.length} email(s) failed`);
+      });
+    }
+
+    if (channels.includes('line') && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+      const { sendLineMulticast } = require('./line');
+      const userIds = registrations.map((r) => r.lineUserId).filter(Boolean);
+      lineCount = userIds.length;
+      sendLineMulticast(userIds, [{ type: 'text', text: `${title}\n${message}` }])
+        .catch((e) => console.error('notify-pre-event LINE error:', e.message));
+    }
+
+    res.json({ queued: { email: emailCount, line: lineCount } });
+  } catch (err) {
+    console.error('POST /api/admin/notify-pre-event error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

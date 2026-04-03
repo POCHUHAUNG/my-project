@@ -100,6 +100,25 @@ async function sendOrganizerNotificationEmail({ name, email, phone, company, lin
   });
 }
 
+async function sendPreEventReminderEmail(toEmail, { title, message }) {
+  if (!process.env.EMAIL_USER) return;
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: `"活動報名系統" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: `【課前通知】${title}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:2rem;border:1px solid #e5e7eb;border-radius:12px;">
+        <h2 style="color:#4f46e5;margin-bottom:0.5rem;">${title}</h2>
+        <div style="margin:1rem 0;padding:1rem;background:#f5f3ff;border-left:4px solid #4f46e5;border-radius:6px;">
+          <p style="color:#374151;margin:0;line-height:1.7;">${message}</p>
+        </div>
+        <p style="color:#9ca3af;font-size:12px;margin-top:1.5rem;">此信件由報名系統自動發送。</p>
+      </div>
+    `,
+  });
+}
+
 async function sendEventCancelNotificationEmail(toEmail, { eventTitle, message }) {
   const transporter = createTransporter();
   await transporter.sendMail({
@@ -140,4 +159,4 @@ async function sendEventChangeNotificationEmail(toEmail, { eventTitle, message }
   });
 }
 
-module.exports = { sendSetPasswordEmail, sendResetPasswordEmail, sendRegistrationConfirmationEmail, sendOrganizerNotificationEmail, sendEventCancelNotificationEmail, sendEventChangeNotificationEmail };
+module.exports = { sendSetPasswordEmail, sendResetPasswordEmail, sendRegistrationConfirmationEmail, sendOrganizerNotificationEmail, sendEventCancelNotificationEmail, sendEventChangeNotificationEmail, sendPreEventReminderEmail };

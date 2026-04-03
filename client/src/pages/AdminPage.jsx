@@ -150,19 +150,25 @@ function AdminPage() {
   }
 
   function getMemberRows() {
-    return members.map((m) => ({
-      編號: m.memberNumber,
-      姓名: m.name,
-      Email: m.email,
-      公司單位: m.company || '',
-      帳號狀態: m.isActivated ? '已啟用' : '未啟用',
-      加入日期: m.createdAt ? new Date(m.createdAt).toLocaleDateString('zh-TW') : '',
-    }));
+    return members.map((m) => {
+      const reg = m.registrations && m.registrations[0];
+      return {
+        編號: m.memberNumber,
+        姓名: m.name,
+        Email: m.email,
+        公司單位: m.company || '',
+        帳號狀態: m.isActivated ? '已啟用' : '未啟用',
+        加入日期: m.createdAt ? new Date(m.createdAt).toLocaleDateString('zh-TW') : '',
+        課程名稱: reg ? (reg.eventTitle || '').split('\n')[0] : '',
+        上課日期: reg ? reg.eventDate || '' : '',
+        出席狀態: reg ? reg.attended || '' : '',
+      };
+    });
   }
 
   function exportCsv() {
     const rows = getMemberRows();
-    const headers = Object.keys(rows[0] || { 編號:'',姓名:'',Email:'',公司單位:'',帳號狀態:'',加入日期:'' });
+    const headers = Object.keys(rows[0] || { 編號:'',姓名:'',Email:'',公司單位:'',帳號狀態:'',加入日期:'',課程名稱:'',上課日期:'',出席狀態:'' });
     const lines = [
       headers.join(','),
       ...rows.map((r) => headers.map((h) => `"${String(r[h]).replace(/"/g, '""')}"`).join(',')),
@@ -189,6 +195,14 @@ function AdminPage() {
   const [notifSending, setNotifSending] = useState(false);
   const [notifResult, setNotifResult] = useState(null);
   const [notifError, setNotifError] = useState(null);
+
+  // 課前通知 state
+  const [preNotifTitle, setPreNotifTitle] = useState('');
+  const [preNotifMessage, setPreNotifMessage] = useState('');
+  const [preNotifChannels, setPreNotifChannels] = useState({ email: true, line: true });
+  const [preNotifSending, setPreNotifSending] = useState(false);
+  const [preNotifResult, setPreNotifResult] = useState(null);
+  const [preNotifError, setPreNotifError] = useState(null);
 
   function headers() {
     return { 'x-admin-password': password, 'Content-Type': 'application/json' };
@@ -278,6 +292,32 @@ function AdminPage() {
       setEditError('網路錯誤，請稍後再試');
     }
     setEditSaving(false);
+  }
+
+  async function sendPreEventNotification() {
+    const channels = Object.keys(preNotifChannels).filter((k) => preNotifChannels[k]);
+    if (!preNotifTitle.trim() || !preNotifMessage.trim() || channels.length === 0) return;
+    setPreNotifSending(true);
+    setPreNotifResult(null);
+    setPreNotifError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/notify-pre-event`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ title: preNotifTitle.trim(), message: preNotifMessage.trim(), channels }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreNotifResult(`已排入發送：Email ${data.queued.email} 封、LINE ${data.queued.line} 則`);
+        setPreNotifTitle('');
+        setPreNotifMessage('');
+      } else {
+        setPreNotifError('發送失敗，請稍後再試');
+      }
+    } catch (_) {
+      setPreNotifError('網路錯誤，請稍後再試');
+    }
+    setPreNotifSending(false);
   }
 
   async function sendNotification() {
@@ -600,9 +640,60 @@ function AdminPage() {
           </button>
         </div>
 
+        {/* 課前通知區塊 */}
+        <div style={{ marginTop: '2rem', padding: '1.2rem', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: '#15803d' }}>課前通知</h3>
+          <input
+            value={preNotifTitle}
+            onChange={(e) => setPreNotifTitle(e.target.value)}
+            placeholder="通知標題（例如：明天課程提醒）"
+            style={{ width: '100%', padding: '0.5rem 0.8rem', border: '1.5px solid #d1fae5', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '0.5rem', boxSizing: 'border-box' }}
+          />
+          <textarea
+            value={preNotifMessage}
+            onChange={(e) => setPreNotifMessage(e.target.value)}
+            placeholder="通知內容…"
+            rows={3}
+            style={{ width: '100%', padding: '0.6rem 0.8rem', border: '1.5px solid #d1fae5', borderRadius: '8px', fontSize: '0.85rem', resize: 'vertical', boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', gap: '1rem', margin: '0.6rem 0' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={preNotifChannels.email}
+                onChange={(e) => setPreNotifChannels((c) => ({ ...c, email: e.target.checked }))}
+              />
+              Email
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={preNotifChannels.line}
+                onChange={(e) => setPreNotifChannels((c) => ({ ...c, line: e.target.checked }))}
+              />
+              LINE
+            </label>
+          </div>
+          {preNotifError && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0.3rem 0 0' }}>{preNotifError}</p>}
+          {preNotifResult && <p style={{ color: '#15803d', fontSize: '0.85rem', fontWeight: 700, margin: '0.3rem 0 0' }}>{preNotifResult}</p>}
+          <button
+            onClick={sendPreEventNotification}
+            disabled={preNotifSending || !preNotifTitle.trim() || !preNotifMessage.trim() || (!preNotifChannels.email && !preNotifChannels.line)}
+            style={{ marginTop: '0.6rem', padding: '0.5rem 1.2rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, opacity: preNotifSending || !preNotifTitle.trim() || !preNotifMessage.trim() || (!preNotifChannels.email && !preNotifChannels.line) ? 0.6 : 1 }}
+          >
+            {preNotifSending ? '發送中…' : '發送通知'}
+          </button>
+        </div>
+
+        <button
+          onClick={() => navigate('/')}
+          style={{ marginTop: '1.5rem', width: '100%', padding: '0.6rem', border: '1.5px solid #c7d2fe', borderRadius: '8px', background: '#eef2ff', color: '#4f46e5', cursor: 'pointer', fontWeight: 600 }}
+        >
+          ← 回報名頁
+        </button>
         <button
           onClick={() => { adminLogout(); setAuthed(false); }}
-          style={{ marginTop: '1.5rem', width: '100%', padding: '0.6rem', border: '1.5px solid #e5e7eb', borderRadius: '8px', background: 'transparent', color: '#6b7280', cursor: 'pointer', fontWeight: 600 }}
+          style={{ marginTop: '0.5rem', width: '100%', padding: '0.6rem', border: '1.5px solid #e5e7eb', borderRadius: '8px', background: 'transparent', color: '#6b7280', cursor: 'pointer', fontWeight: 600 }}
         >
           登出後台
         </button>

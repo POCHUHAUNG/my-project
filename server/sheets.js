@@ -93,7 +93,7 @@ async function ensureRegistrationHeaders(sheets, eventId) {
   }
 }
 
-async function appendRegistration({ name, email, phone, company, lineId, memberNumber }, eventId = defaultEventId()) {
+async function appendRegistration({ name, email, phone, company, lineUserId, memberNumber }, eventId = defaultEventId()) {
   const sheets = getClient();
   await ensureRegistrationHeaders(sheets, eventId);
   const submittedAt = formatTaipeiTime(new Date());
@@ -103,7 +103,7 @@ async function appendRegistration({ name, email, phone, company, lineId, memberN
     range: `registrations-${eventId}!A2`,
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[submittedAt, memberNumber || '', name, email, phone, company, lineId, '待確認', checkinToken]],
+      values: [[submittedAt, memberNumber || '', name, email, phone, company, '', '待確認', checkinToken, lineUserId || '']],
     },
   });
   return checkinToken;
@@ -128,6 +128,26 @@ async function getRegistrationsByEmail(email, eventId = defaultEventId()) {
       attended: row[7] || '待確認',
       checkinToken: row[8] || '',
     }));
+}
+
+async function getAllRegistrations(eventId = defaultEventId()) {
+  const sheets = getClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId(),
+    range: `registrations-${eventId}!A2:J`,
+  });
+  const rows = res.data.values || [];
+  return rows.map((row) => ({
+    submittedAt: row[0] || '',
+    memberNumber: row[1] || '',
+    name: row[2] || '',
+    email: row[3] || '',
+    phone: row[4] || '',
+    company: row[5] || '',
+    attended: row[7] || '待確認',
+    checkinToken: row[8] || '',
+    lineUserId: row[9] || '',
+  }));
 }
 
 async function getRegistrationByToken(token, eventId = defaultEventId()) {
@@ -253,4 +273,4 @@ async function initializeSheets(eventId = defaultEventId()) {
   await sheets.spreadsheets.batchUpdate({ spreadsheetId: sid, requestBody: { requests } });
 }
 
-module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, updateEventImages, markAttended, getRegistrationByToken, initializeSheets };
+module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets };
