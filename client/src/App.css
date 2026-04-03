@@ -1,0 +1,582 @@
+/* ── 頁面佈局 ── */
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 4.5rem 1.25rem 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* ── 活動介紹 ── */
+.event-info {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(79,70,229,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  overflow: hidden;
+}
+
+.event-hero {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+.event-info-body { padding: 2rem; }
+
+.event-info h1 {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  color: #111;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, #1e1b4b, #4f46e5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.event-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4f46e5;
+  background: #ede9fe;
+  padding: 0.3rem 0.85rem;
+  border-radius: 99px;
+}
+
+.event-description {
+  color: #6b7280;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  white-space: pre-line;
+  border-top: 1px solid #f0f0f5;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.upload-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
+
+/* ── 議程 ── */
+.agenda {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(79,70,229,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  padding: 2rem;
+  overflow: hidden;
+}
+
+.agenda-header,
+.reg-header {
+  margin-bottom: 1.5rem;
+}
+
+.agenda-header-tag,
+.reg-header-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #4f46e5;
+  background: #ede9fe;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  margin-bottom: 0.5rem;
+}
+
+.agenda-header h2,
+.reg-header h2 {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #111;
+  margin: 0;
+}
+
+.reg-subtitle {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin-top: 0.3rem;
+}
+
+.agenda-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.agenda-col-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  letter-spacing: 0.01em;
+}
+
+.agenda-col-label.morning {
+  background: linear-gradient(135deg, #fff7ed, #fef3c7);
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.agenda-col-label.afternoon {
+  background: linear-gradient(135deg, #eff6ff, #e0e7ff);
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+
+.agenda-col-label.evening {
+  background: linear-gradient(135deg, #fdf4ff, #ede9fe);
+  color: #6b21a8;
+  border: 1px solid #d8b4fe;
+}
+
+.agenda-col-label.day1 {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.agenda-col-label.day2 {
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  color: #9f1239;
+  border: 1px solid #fda4af;
+}
+
+.agenda-col-label.day3 {
+  background: linear-gradient(135deg, #ecfeff, #cffafe);
+  color: #155e75;
+  border: 1px solid #67e8f9;
+}
+
+.agenda-col-label.day4 {
+  background: linear-gradient(135deg, #fff8f1, #ffedd5);
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.agenda-col-label.fullday {
+  background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.col-icon { font-size: 1rem; }
+
+.agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.agenda-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: default;
+  transition: transform 0.2s, box-shadow 0.2s;
+  background: #fafafa;
+  border: 1px solid #f0f0f5;
+  display: flex;
+  flex-direction: column;
+}
+
+.agenda-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 12px 28px rgba(79,70,229,0.14);
+}
+
+.agenda-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(
+    180deg,
+    hsl(calc(240 + var(--i, 0) * 30), 72%, 62%),
+    hsl(calc(270 + var(--i, 0) * 30), 68%, 54%)
+  );
+  border-radius: 4px 0 0 4px;
+}
+
+.agenda-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 0.85rem 0.85rem 1.1rem;
+  flex: 1;
+}
+
+.agenda-index {
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: #d1d5db;
+  letter-spacing: 0.05em;
+  margin-top: 0.1rem;
+  min-width: 18px;
+}
+
+.agenda-card-content { flex: 1; }
+
+.agenda-card-time {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #4f46e5;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.2rem;
+}
+
+.agenda-topic {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #111827;
+  line-height: 1.35;
+}
+
+.agenda-speaker {
+  font-size: 0.75rem;
+  color: #6366f1;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.agenda-desc {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin-top: 0.2rem;
+}
+
+.empty {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  padding: 1.5rem 0;
+}
+
+/* ── 報名表單 ── */
+.registration {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(79,70,229,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.registration::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4f46e5, #818cf8, #a78bfa, #4f46e5);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+.fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.fields-grid .field:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.field-icon { font-size: 0.9rem; }
+
+.field input {
+  padding: 0.7rem 0.9rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  color: #111827;
+  background: #f9fafb;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.field input::placeholder { color: #c4c9d4; }
+
+.field input:focus {
+  border-color: #4f46e5;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(79,70,229,0.08);
+}
+
+.field.has-value input {
+  border-color: #a5b4fc;
+  background: #fff;
+}
+
+.field.has-error input {
+  border-color: #f87171;
+  background: #fff5f5;
+}
+
+.field-error {
+  font-size: 0.75rem;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.submit-btn {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.9rem;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+}
+
+.submit-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(79,70,229,0.45);
+}
+
+.submit-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+.reg-success {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.reg-success-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+.reg-success h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #111;
+  margin-bottom: 0.4rem;
+}
+
+.reg-success p { color: #6b7280; }
+
+/* ── 課程 DM ── */
+.dm-section {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(79,70,229,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  padding: 2rem;
+}
+
+.dm-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #111;
+  margin-bottom: 1.25rem;
+}
+
+.dm-image {
+  width: 100%;
+  border-radius: 10px;
+  display: block;
+}
+
+/* ── 圖片上傳 ── */
+.image-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.upload-btn:hover {
+  border-color: #4f46e5;
+  color: #4f46e5;
+  background: #f5f3ff;
+}
+
+/* ── 裁切 Modal ── */
+.crop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.crop-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: min(660px, 100%);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 32px 64px rgba(0,0,0,0.25);
+}
+
+.crop-modal h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #111;
+}
+
+.crop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.crop-label {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.crop-aspect-btn {
+  padding: 0.28rem 0.7rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 99px;
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.crop-aspect-btn.active {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.crop-area {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  background: #111;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.crop-zoom-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.crop-zoom-bar input[type=range] {
+  flex: 1;
+  accent-color: #4f46e5;
+}
+
+.crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.crop-cancel {
+  padding: 0.6rem 1.25rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.crop-confirm {
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+}
+
+.crop-confirm:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── 共用 ── */
+.error { color: #dc2626; font-size: 0.85rem; }
+
+@media (max-width: 540px) {
+  .fields-grid, .agenda-columns { grid-template-columns: 1fr; }
+  .app { padding: 1rem 0.9rem 4rem; }
+  .event-info-body, .agenda, .registration, .dm-section { padding: 1.25rem; }
+  .event-info h1 { font-size: 1.5rem; }
+}

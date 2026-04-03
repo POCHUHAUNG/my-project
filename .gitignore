@@ -1,0 +1,26 @@
+.spectra/
+openspec/.vector-search.db*
+
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment variables (sensitive!)
+server/.env
+client/.env
+.env
+
+# Build output
+client/dist/
+
+# Member data (local only)
+server/data/members.json
+
+# Uploaded images (ephemeral, not tracked)
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
