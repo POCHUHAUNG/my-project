@@ -214,6 +214,21 @@ function AdminPage() {
   const [completionData, setCompletionData] = useState(null);
   const [completionLoading, setCompletionLoading] = useState(false);
   const [completionError, setCompletionError] = useState(null);
+  const [completionFilter, setCompletionFilter] = useState('all');
+  const [completionSearch, setCompletionSearch] = useState('');
+
+  const filteredRegistrants = (() => {
+    if (!completionData) return [];
+    return completionData.registrants.filter((r) => {
+      if (completionFilter === 'incomplete' && r.completed.every(Boolean)) return false;
+      if (completionFilter === 'complete' && !r.completed.every(Boolean)) return false;
+      if (completionSearch) {
+        const q = completionSearch.toLowerCase();
+        if (!r.name.toLowerCase().includes(q) && !(r.email || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  })();
 
   // Notification state
   const [notifType, setNotifType] = useState('update');
@@ -979,6 +994,14 @@ function AdminPage() {
             </button>
           </div>
           {completionError && <p style={{ color: '#dc2626', fontSize: '0.83rem', margin: '0 0 0.5rem' }}>{completionError}</p>}
+          {completionData && completionData.forms.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              {[['all', '全部'], ['incomplete', '未完成'], ['complete', '已完成']].map(([val, label]) => (
+                <button key={val} onClick={() => setCompletionFilter(val)} style={{ padding: '0.3rem 0.8rem', borderRadius: '6px', border: '1px solid #16a34a', background: completionFilter === val ? '#16a34a' : '#fff', color: completionFilter === val ? '#fff' : '#16a34a', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>{label}</button>
+              ))}
+              <input type="text" placeholder="搜尋姓名或 Email" value={completionSearch} onChange={(e) => setCompletionSearch(e.target.value)} style={{ padding: '0.3rem 0.7rem', borderRadius: '6px', border: '1px solid #bbf7d0', fontSize: '0.82rem', minWidth: '160px', outline: 'none' }} />
+            </div>
+          )}
           {completionData && completionData.forms.length === 0 && <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>尚未設定表單</p>}
           {completionData && completionData.forms.length > 0 && (
             <div style={{ overflowX: 'auto' }}>
@@ -999,7 +1022,7 @@ function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {completionData.registrants.map((r) => (
+                  {filteredRegistrants.map((r) => (
                     <tr key={r.email}>
                       <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #d1fae5' }}>{r.name}</td>
                       <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #d1fae5', color: '#6b7280' }}>{r.email}</td>
