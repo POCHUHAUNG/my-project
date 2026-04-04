@@ -734,7 +734,7 @@ function AdminPage() {
               <input type="checkbox" checked={newField.required} onChange={(e) => setNewField((f) => ({ ...f, required: e.target.checked }))} />
               必填
             </label>
-            <button onClick={addCustomField} style={{ padding: '0.35rem 0.8rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
+            <button onClick={addCustomField} disabled={!newField.label.trim()} style={{ padding: '0.35rem 0.8rem', background: newField.label.trim() ? '#7c3aed' : '#d1d5db', color: '#fff', border: 'none', borderRadius: '6px', cursor: newField.label.trim() ? 'pointer' : 'not-allowed', fontSize: '0.82rem', fontWeight: 700 }}>
               + 新增
             </button>
           </div>
