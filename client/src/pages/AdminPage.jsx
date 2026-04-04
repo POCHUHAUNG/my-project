@@ -11,6 +11,9 @@ function AdminPage() {
   const navigate = useNavigate();
   const { login: adminLogin, logout: adminLogout } = useAdmin();
   const [members, setMembers] = useState([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberPageSize, setMemberPageSize] = useState(20);
+  const [memberPage, setMemberPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -511,6 +514,15 @@ function AdminPage() {
     );
   }
 
+  const filteredMembers = memberSearch.trim()
+    ? members.filter((m) => {
+        const q = memberSearch.trim().toLowerCase();
+        return (m.name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q);
+      })
+    : members;
+  const memberTotalPages = Math.max(1, Math.ceil(filteredMembers.length / memberPageSize));
+  const pagedMembers = filteredMembers.slice((memberPage - 1) * memberPageSize, memberPage * memberPageSize);
+
   return (
     <div className="app">
       <section className="registration">
@@ -631,11 +643,28 @@ function AdminPage() {
           </form>
         )}
 
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <input
+            type="text"
+            value={memberSearch}
+            onChange={(e) => { setMemberSearch(e.target.value); setMemberPage(1); }}
+            placeholder="搜尋姓名或 Email"
+            style={{ flex: 1, minWidth: '180px', padding: '0.4rem 0.7rem', border: '1.5px solid #d1d5db', borderRadius: '6px', fontSize: '0.85rem' }}
+          />
+          <select
+            value={memberPageSize}
+            onChange={(e) => { setMemberPageSize(Number(e.target.value)); setMemberPage(1); }}
+            style={{ padding: '0.4rem 0.6rem', border: '1.5px solid #d1d5db', borderRadius: '6px', fontSize: '0.85rem' }}
+          >
+            {[20, 30, 40, 50].map((n) => <option key={n} value={n}>{n} 筆 / 頁</option>)}
+          </select>
+        </div>
+
         {members.length === 0 ? (
           <p className="empty">目前沒有會員資料</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {members.map((m) => (
+            {pagedMembers.map((m) => (
               <div key={m.memberId} style={{ padding: '0.85rem 1rem', background: '#fafafa', borderRadius: '10px', border: '1px solid #f0f0f5' }}>
                 {editingId === m.memberId ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -721,6 +750,26 @@ function AdminPage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {filteredMembers.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', marginTop: '0.75rem', fontSize: '0.85rem', color: '#374151' }}>
+            <button
+              onClick={() => setMemberPage((p) => Math.max(1, p - 1))}
+              disabled={memberPage === 1}
+              style={{ padding: '0.3rem 0.75rem', border: '1.5px solid #d1d5db', borderRadius: '6px', background: '#fff', cursor: memberPage === 1 ? 'not-allowed' : 'pointer', opacity: memberPage === 1 ? 0.4 : 1, fontSize: '0.85rem' }}
+            >
+              ‹ 上一頁
+            </button>
+            <span>第 {memberPage} 頁 / 共 {memberTotalPages} 頁</span>
+            <button
+              onClick={() => setMemberPage((p) => Math.min(memberTotalPages, p + 1))}
+              disabled={memberPage === memberTotalPages}
+              style={{ padding: '0.3rem 0.75rem', border: '1.5px solid #d1d5db', borderRadius: '6px', background: '#fff', cursor: memberPage === memberTotalPages ? 'not-allowed' : 'pointer', opacity: memberPage === memberTotalPages ? 0.4 : 1, fontSize: '0.85rem' }}
+            >
+              下一頁 ›
+            </button>
           </div>
         )}
 
