@@ -105,7 +105,8 @@ app.get('/api/agenda', async (req, res) => {
 
 // POST /api/register — 寫入報名資料，並自動建立會員帳號
 app.post('/api/register', async (req, res) => {
-  const { name, email, phone, company, lineUserId } = req.body;
+  const { name, email, phone, company, lineUserId = '', googleId = '', facebookId = '' } = req.body;
+  const authId = lineUserId || googleId || facebookId;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
 
   const missing = [];
@@ -113,7 +114,7 @@ app.post('/api/register', async (req, res) => {
   if (!email) missing.push('email');
   if (!phone) missing.push('phone');
   if (!company) missing.push('company');
-  if (!lineUserId) missing.push('lineUserId');
+  if (!authId) missing.push('auth (lineUserId / googleId / facebookId)');
 
   if (missing.length > 0) {
     return res.status(400).json({ error: 'Missing required fields', missing });
@@ -134,7 +135,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     // 2. Append registration to Sheets
-    await appendRegistration({ name, email, phone, company, lineUserId, memberNumber: member.memberNumber || '' }, eventId);
+    await appendRegistration({ name, email, phone, company, lineUserId: authId, memberNumber: member.memberNumber || '' }, eventId);
 
     // 3. Try sending emails (non-fatal if fails)
     if (process.env.EMAIL_USER) {
@@ -231,6 +232,37 @@ app.post('/api/auth/set-password', async (req, res) => {
 });
 
 // POST /api/auth/login — 登入
+// POST /api/auth/google/callback — verify Google ID token, return googleId + displayName
+app.post('/api/auth/google/callback', async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Missing credential' });
+  try {
+    const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+    if (!infoRes.ok) return res.status(400).json({ error: 'Invalid Google credential' });
+    const { sub, name, email } = await infoRes.json();
+    res.json({ googleId: `google:${sub}`, displayName: name || email });
+  } catch (err) {
+    console.error('POST /api/auth/google/callback error:', err.message);
+    res.status(400).json({ error: 'Google verification failed' });
+  }
+});
+
+// POST /api/auth/facebook/callback — verify Facebook access token, return facebookId + displayName
+app.post('/api/auth/facebook/callback', async (req, res) => {
+  const { accessToken } = req.body;
+  if (!accessToken) return res.status(400).json({ error: 'Missing accessToken' });
+  try {
+    const profileRes = await fetch(`https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`);
+    if (!profileRes.ok) return res.status(400).json({ error: 'Invalid Facebook token' });
+    const { id, name } = await profileRes.json();
+    if (!id) return res.status(400).json({ error: 'Facebook verification failed' });
+    res.json({ facebookId: `facebook:${id}`, displayName: name });
+  } catch (err) {
+    console.error('POST /api/auth/facebook/callback error:', err.message);
+    res.status(400).json({ error: 'Facebook verification failed' });
+  }
+});
+
 // POST /api/auth/line/callback — LINE Login OAuth: exchange code for lineUserId
 app.post('/api/auth/line/callback', async (req, res) => {
   const { code, redirectUri } = req.body;
