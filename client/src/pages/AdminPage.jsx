@@ -195,6 +195,26 @@ function AdminPage() {
   const [formConfigSaved, setFormConfigSaved] = useState(false);
   const [newField, setNewField] = useState({ label: '', placeholder: '', hint: '', required: false });
 
+  // Google Forms management state
+  const [forms, setForms] = useState([]);
+  const [newFormEntry, setNewFormEntry] = useState({ name: '', prefillTemplate: '', responseSheetId: '', responseEmailColumn: 1 });
+  const [formsSaving, setFormsSaving] = useState(false);
+  const [formsSaved, setFormsSaved] = useState(false);
+
+  // Form link generation state
+  const [linkList, setLinkList] = useState(null);
+  const [linkListLoading, setLinkListLoading] = useState(false);
+
+  // Send form links state
+  const [sendingFormLinks, setSendingFormLinks] = useState(null);
+  const [sendFormLinksResult, setSendFormLinksResult] = useState(null);
+  const [sendFormLinksError, setSendFormLinksError] = useState(null);
+
+  // Form completion matrix state
+  const [completionData, setCompletionData] = useState(null);
+  const [completionLoading, setCompletionLoading] = useState(false);
+  const [completionError, setCompletionError] = useState(null);
+
   // Notification state
   const [notifType, setNotifType] = useState('update');
   const [notifMessage, setNotifMessage] = useState('');
@@ -228,9 +248,10 @@ function AdminPage() {
         adminLogin(password);
         setMembers(await res.json());
         setAuthed(true);
-        // Load form config
+        // Load form config and google forms
         fetch(`${API_BASE}/api/event`).then(r => r.ok ? r.json() : null).then(data => {
           if (data?.fieldConfig) setFormConfig(data.fieldConfig);
+          if (Array.isArray(data?.forms)) setForms(data.forms);
         }).catch(() => {});
       } else {
         setError('密碼錯誤');
@@ -377,6 +398,75 @@ function AdminPage() {
 
   function removeCustomField(id) {
     setFormConfig((c) => ({ ...c, customFields: (c.customFields || []).filter((f) => f.id !== id) }));
+  }
+
+  async function saveGoogleForms() {
+    setFormsSaving(true);
+    setFormsSaved(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/event`, {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ forms }),
+      });
+      if (res.ok) setFormsSaved(true);
+    } catch (_) {}
+    setFormsSaving(false);
+  }
+
+  async function loadLinkList() {
+    setLinkListLoading(true);
+    setSendFormLinksResult(null);
+    setSendFormLinksError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/generate-form-links`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({}),
+      });
+      if (res.ok) setLinkList(await res.json());
+      else { const d = await res.json(); setSendFormLinksError(d.error || '無法取得連結'); }
+    } catch (_) { setSendFormLinksError('網路錯誤'); }
+    setLinkListLoading(false);
+  }
+
+  function copyAllLinks() {
+    if (!linkList || linkList.length === 0) return;
+    const lines = linkList.map((r) => [r.name, r.email, ...r.links.map((l) => l.url)].join('\t'));
+    navigator.clipboard.writeText(lines.join('\n'));
+  }
+
+  async function sendFormLinks(channel) {
+    setSendingFormLinks(channel);
+    setSendFormLinksResult(null);
+    setSendFormLinksError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/send-form-links`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ channel }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setSendFormLinksResult(`已發送 ${d.sent} 筆，跳過 ${d.skipped} 筆`);
+      } else {
+        const d = await res.json();
+        setSendFormLinksError(d.error || '發送失敗');
+      }
+    } catch (_) { setSendFormLinksError('網路錯誤'); }
+    setSendingFormLinks(null);
+  }
+
+  async function loadCompletionMatrix() {
+    setCompletionLoading(true);
+    setCompletionError(null);
+    try {
+      const eventId = process.env.DEFAULT_EVENT_ID || '';
+      const res = await fetch(`${API_BASE}/api/admin/form-completion`, { headers: headers() });
+      if (res.ok) setCompletionData(await res.json());
+      else { const d = await res.json(); setCompletionError(d.error || '載入失敗'); }
+    } catch (_) { setCompletionError('網路錯誤'); }
+    setCompletionLoading(false);
   }
 
   if (!authed) {
@@ -747,6 +837,195 @@ function AdminPage() {
             {formConfigSaving ? '儲存中…' : '儲存表單設定'}
           </button>
           {formConfigSaved && <span style={{ marginLeft: '0.75rem', color: '#15803d', fontSize: '0.85rem' }}>✓ 已儲存</span>}
+        </div>
+
+        {/* 表單管理區塊 */}
+        <div style={{ marginTop: '2rem', padding: '1.2rem', background: '#fdf4ff', borderRadius: '10px', border: '1px solid #e9d5ff' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: '#7e22ce' }}>表單管理</h3>
+
+          {/* 現有 forms 清單 */}
+          {forms.length === 0 && <p style={{ fontSize: '0.85rem', color: '#9ca3af', margin: '0 0 0.75rem' }}>尚未設定任何表單</p>}
+          {forms.map((f, i) => (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem', padding: '0.6rem 0.75rem', background: '#f3e8ff', borderRadius: '8px' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#6b21a8' }}>{f.name}</p>
+                <p style={{ margin: '0.1rem 0 0', fontSize: '0.72rem', color: '#7c3aed', wordBreak: 'break-all' }}>URL: {f.prefillTemplate.substring(0, 60)}{f.prefillTemplate.length > 60 ? '…' : ''}</p>
+                <p style={{ margin: '0.1rem 0 0', fontSize: '0.72rem', color: '#7c3aed' }}>Sheet ID: {f.responseSheetId} | Email 欄: {f.responseEmailColumn}</p>
+              </div>
+              <button onClick={() => setForms((fs) => fs.filter((_, j) => j !== i))} style={{ padding: '0.25rem 0.55rem', background: '#fca5a5', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.78rem', color: '#7f1d1d', flexShrink: 0 }}>刪除</button>
+            </div>
+          ))}
+
+          {/* 新增表單 */}
+          {forms.length < 4 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
+              <input
+                value={newFormEntry.name}
+                onChange={(e) => setNewFormEntry((f) => ({ ...f, name: e.target.value }))}
+                placeholder="表單名稱 *（如：課前調查）"
+                style={{ padding: '0.35rem 0.6rem', border: '1.5px solid #d8b4fe', borderRadius: '6px', fontSize: '0.82rem' }}
+              />
+              <input
+                value={newFormEntry.prefillTemplate}
+                onChange={(e) => setNewFormEntry((f) => ({ ...f, prefillTemplate: e.target.value }))}
+                placeholder="預填 URL 模板 *（含 {name} 和 {email} 佔位符）"
+                style={{ padding: '0.35rem 0.6rem', border: '1.5px solid #d8b4fe', borderRadius: '6px', fontSize: '0.82rem' }}
+              />
+              <input
+                value={newFormEntry.responseSheetId}
+                onChange={(e) => setNewFormEntry((f) => ({ ...f, responseSheetId: e.target.value }))}
+                placeholder="回應 Sheet ID *"
+                style={{ padding: '0.35rem 0.6rem', border: '1.5px solid #d8b4fe', borderRadius: '6px', fontSize: '0.82rem' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.82rem', color: '#374151' }}>Email 欄位（0-based）：</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={newFormEntry.responseEmailColumn}
+                  onChange={(e) => setNewFormEntry((f) => ({ ...f, responseEmailColumn: Number(e.target.value) }))}
+                  style={{ width: '60px', padding: '0.35rem 0.5rem', border: '1.5px solid #d8b4fe', borderRadius: '6px', fontSize: '0.82rem' }}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (!newFormEntry.name.trim() || !newFormEntry.prefillTemplate.trim() || !newFormEntry.responseSheetId.trim()) return;
+                  setForms((fs) => [...fs, { id: `f_${Date.now()}`, ...newFormEntry, name: newFormEntry.name.trim(), prefillTemplate: newFormEntry.prefillTemplate.trim(), responseSheetId: newFormEntry.responseSheetId.trim() }]);
+                  setNewFormEntry({ name: '', prefillTemplate: '', responseSheetId: '', responseEmailColumn: 1 });
+                  setFormsSaved(false);
+                }}
+                disabled={!newFormEntry.name.trim() || !newFormEntry.prefillTemplate.trim() || !newFormEntry.responseSheetId.trim()}
+                style={{ padding: '0.4rem 1rem', background: '#7e22ce', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.83rem', fontWeight: 700, opacity: (!newFormEntry.name.trim() || !newFormEntry.prefillTemplate.trim() || !newFormEntry.responseSheetId.trim()) ? 0.5 : 1 }}
+              >
+                新增表單
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: '0.85rem', color: '#9ca3af', margin: '0.5rem 0' }}>最多 4 個表單</p>
+          )}
+
+          <button
+            onClick={saveGoogleForms}
+            disabled={formsSaving}
+            style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', background: '#7e22ce', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+          >
+            {formsSaving ? '儲存中…' : '儲存表單設定'}
+          </button>
+          {formsSaved && <span style={{ marginLeft: '0.75rem', color: '#15803d', fontSize: '0.85rem' }}>✓ 已儲存</span>}
+        </div>
+
+        {/* 連結清單與發送區塊 */}
+        <div style={{ marginTop: '2rem', padding: '1.2rem', background: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: '#1d4ed8' }}>發送個人化連結</h3>
+
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            <button onClick={loadLinkList} disabled={linkListLoading} style={{ padding: '0.45rem 1rem', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, opacity: linkListLoading ? 0.6 : 1 }}>
+              {linkListLoading ? '載入中…' : '顯示連結清單'}
+            </button>
+            <button onClick={() => sendFormLinks('email')} disabled={!!sendingFormLinks} style={{ padding: '0.45rem 1rem', background: '#0369a1', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, opacity: sendingFormLinks ? 0.6 : 1 }}>
+              {sendingFormLinks === 'email' ? '發送中…' : '寄送 Email'}
+            </button>
+            <button onClick={() => sendFormLinks('line')} disabled={!!sendingFormLinks} style={{ padding: '0.45rem 1rem', background: '#06b6d4', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, opacity: sendingFormLinks ? 0.6 : 1 }}>
+              {sendingFormLinks === 'line' ? '發送中…' : '發送 LINE 訊息'}
+            </button>
+          </div>
+
+          {sendFormLinksError && <p style={{ color: '#dc2626', fontSize: '0.83rem', margin: '0 0 0.5rem' }}>{sendFormLinksError}</p>}
+          {sendFormLinksResult && <p style={{ color: '#15803d', fontSize: '0.85rem', fontWeight: 700, margin: '0 0 0.5rem' }}>{sendFormLinksResult}</p>}
+
+          {linkList && linkList.length > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#374151' }}>共 {linkList.length} 位學員</p>
+                <button onClick={copyAllLinks} style={{ padding: '0.3rem 0.7rem', background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: '5px', color: '#0369a1', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700 }}>全部複製</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ background: '#dbeafe' }}>
+                      <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', borderBottom: '1px solid #bfdbfe' }}>學員姓名</th>
+                      <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', borderBottom: '1px solid #bfdbfe' }}>Email</th>
+                      {linkList[0].links.map((l) => (
+                        <th key={l.formName} style={{ padding: '0.4rem 0.6rem', textAlign: 'left', borderBottom: '1px solid #bfdbfe' }}>{l.formName}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linkList.map((r) => (
+                      <tr key={r.email}>
+                        <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #e0f2fe' }}>{r.name}</td>
+                        <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #e0f2fe', color: '#6b7280' }}>{r.email}</td>
+                        {r.links.map((l) => (
+                          <td key={l.formName} style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #e0f2fe' }}>
+                            <a href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', fontSize: '0.75rem', wordBreak: 'break-all' }}>連結</a>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {linkList && linkList.length === 0 && <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>目前沒有報名者</p>}
+        </div>
+
+        {/* 完成狀況矩陣區塊 */}
+        <div style={{ marginTop: '2rem', padding: '1.2rem', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: '#15803d' }}>完成狀況</h3>
+            <button onClick={loadCompletionMatrix} disabled={completionLoading} style={{ padding: '0.4rem 0.9rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontSize: '0.83rem', fontWeight: 700, opacity: completionLoading ? 0.6 : 1 }}>
+              {completionLoading ? '載入中…' : '重新整理'}
+            </button>
+          </div>
+          {completionError && <p style={{ color: '#dc2626', fontSize: '0.83rem', margin: '0 0 0.5rem' }}>{completionError}</p>}
+          {completionData && completionData.forms.length === 0 && <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>尚未設定表單</p>}
+          {completionData && completionData.forms.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ background: '#dcfce7' }}>
+                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', borderBottom: '1px solid #bbf7d0' }}>姓名</th>
+                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', borderBottom: '1px solid #bbf7d0' }}>Email</th>
+                    {completionData.forms.map((f) => {
+                      const hasError = completionData.errors?.some((e) => e.formId === f.id);
+                      return (
+                        <th key={f.id} style={{ padding: '0.4rem 0.6rem', textAlign: 'center', borderBottom: '1px solid #bbf7d0' }}>
+                          {f.name}
+                          {hasError && <span title="無法讀取回應表（請確認已共用給 service account）" style={{ marginLeft: '0.25rem', cursor: 'help' }}>⚠</span>}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {completionData.registrants.map((r) => (
+                    <tr key={r.email}>
+                      <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #d1fae5' }}>{r.name}</td>
+                      <td style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #d1fae5', color: '#6b7280' }}>{r.email}</td>
+                      {r.completed.map((done, i) => (
+                        <td key={i} style={{ padding: '0.35rem 0.6rem', borderBottom: '1px solid #d1fae5', textAlign: 'center', color: done ? '#16a34a' : '#9ca3af', fontWeight: done ? 700 : 400 }}>
+                          {done ? '✓' : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {/* Summary row */}
+                  <tr style={{ background: '#f0fdf4', fontWeight: 700 }}>
+                    <td colSpan={2} style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem', color: '#374151' }}>完成人數</td>
+                    {completionData.forms.map((_, i) => {
+                      const count = completionData.registrants.filter((r) => r.completed[i]).length;
+                      return (
+                        <td key={i} style={{ padding: '0.35rem 0.6rem', textAlign: 'center', fontSize: '0.78rem', color: '#15803d' }}>
+                          {count} / {completionData.registrants.length}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* 課前通知區塊 */}

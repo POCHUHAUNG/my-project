@@ -20,13 +20,14 @@ const spreadsheetId = () => {
 
 const defaultEventId = () => process.env.DEFAULT_EVENT_ID || '001';
 
-async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig }, eventId = defaultEventId()) {
+async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms }, eventId = defaultEventId()) {
   const sheets = getClient();
   const tab = `event-info-${eventId}`;
-  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2' };
+  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2', forms: 'J2' };
   const args = {
     imageUrl, dmUrl, agendaTagEn, agendaTagZh,
     fieldConfig: fieldConfig !== undefined ? JSON.stringify(fieldConfig) : undefined,
+    forms: forms !== undefined ? JSON.stringify(forms) : undefined,
   };
   const requests = Object.entries(args)
     .filter(([, v]) => v !== undefined)
@@ -43,13 +44,16 @@ async function getEventInfo(eventId = defaultEventId()) {
   const sheets = getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
-    range: `event-info-${eventId}!A2:I2`,
+    range: `event-info-${eventId}!A2:J2`,
   });
   const rows = res.data.values;
   if (!rows || rows.length === 0) return null;
-  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr] = rows[0];
+  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr, formsStr] = rows[0];
   let fieldConfig = { hints: {}, customFields: [] };
   try { if (fieldConfigStr) fieldConfig = JSON.parse(fieldConfigStr); } catch {}
+  let forms = [];
+  try { if (formsStr) forms = JSON.parse(formsStr); } catch {}
+  if (!Array.isArray(forms)) forms = [];
   return {
     title, date, location, description,
     imageUrl: imageUrl || '',
@@ -57,7 +61,23 @@ async function getEventInfo(eventId = defaultEventId()) {
     agendaTagEn: agendaTagEn || 'Schedule',
     agendaTagZh: agendaTagZh || '活動議程',
     fieldConfig,
+    forms,
   };
+}
+
+async function getFormResponses(responseSheetId, responseEmailColumn) {
+  const sheets = getClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: responseSheetId,
+    range: 'Sheet1!A2:Z',
+  });
+  const rows = res.data.values || [];
+  const emails = new Set();
+  for (const row of rows) {
+    const val = row[responseEmailColumn];
+    if (val && typeof val === 'string') emails.add(val.trim().toLowerCase());
+  }
+  return emails;
 }
 
 async function getAgenda(eventId = defaultEventId()) {
@@ -280,4 +300,4 @@ async function initializeSheets(eventId = defaultEventId()) {
   await sheets.spreadsheets.batchUpdate({ spreadsheetId: sid, requestBody: { requests } });
 }
 
-module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets };
+module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses };

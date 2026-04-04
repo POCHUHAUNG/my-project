@@ -16,7 +16,7 @@ function getLocalIP() {
   }
   return 'localhost';
 }
-const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets } = require('./sheets');
+const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses } = require('./sheets');
 const memberStore = require('./memberStore');
 const { signToken, requireAuth } = require('./auth');
 
@@ -75,15 +75,15 @@ app.get('/api/event', async (req, res) => {
   }
 });
 
-// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig）
+// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig / forms）
 app.patch('/api/event', async (req, res) => {
-  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig } = req.body;
+  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms } = req.body;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
-  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined) {
+  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined && forms === undefined) {
     return res.status(400).json({ error: 'Provide at least one field to update' });
   }
   try {
-    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig }, eventId);
+    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms }, eventId);
     res.json({ success: true });
   } catch (err) {
     console.error('PATCH /api/event error:', err.message);
@@ -655,6 +655,141 @@ app.post('/api/admin/init-sheets', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('POST /api/admin/init-sheets error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper: generate pre-fill links for all registrants of an event
+async function generateFormLinks(eventId) {
+  const info = await getEventInfo(eventId);
+  const forms = (info && info.forms) || [];
+  if (forms.length === 0) return { forms: [], links: null };
+  const registrations = await getAllRegistrations(eventId);
+  const links = registrations.map((r) => ({
+    name: r.name,
+    email: r.email,
+    lineUserId: r.lineUserId,
+    links: forms.map((form) => ({
+      formName: form.name,
+      formId: form.id,
+      url: form.prefillTemplate
+        .replace(/\{name\}/g, encodeURIComponent(r.name || ''))
+        .replace(/\{email\}/g, encodeURIComponent(r.email || '')),
+    })),
+  }));
+  return { forms, links };
+}
+
+// POST /api/admin/generate-form-links — 產生學員個人化預填連結
+app.post('/api/admin/generate-form-links', requireAdmin, async (req, res) => {
+  const { eventId = process.env.DEFAULT_EVENT_ID || '001' } = req.body;
+  try {
+    const { forms, links } = await generateFormLinks(eventId);
+    if (forms.length === 0) return res.status(400).json({ error: 'No forms configured for this event' });
+    res.json(links);
+  } catch (err) {
+    console.error('POST /api/admin/generate-form-links error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/send-form-links — 批次發送預填連結（email / line）
+app.post('/api/admin/send-form-links', requireAdmin, async (req, res) => {
+  const { eventId = process.env.DEFAULT_EVENT_ID || '001', channel } = req.body;
+  if (channel !== 'email' && channel !== 'line') {
+    return res.status(400).json({ error: 'channel must be "email" or "line"' });
+  }
+  try {
+    const { forms, links } = await generateFormLinks(eventId);
+    if (forms.length === 0) return res.status(400).json({ error: 'No forms configured for this event' });
+
+    let sent = 0;
+    let skipped = 0;
+
+    if (channel === 'email') {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      });
+      for (const r of links) {
+        if (!r.email) { skipped++; continue; }
+        const linksHtml = r.links.map((l) => `<p><strong>${l.formName}</strong>：<a href="${l.url}">${l.url}</a></p>`).join('');
+        try {
+          await transporter.sendMail({
+            from: `"活動報名系統" <${process.env.EMAIL_USER}>`,
+            to: r.email,
+            subject: '【課程表單】請填寫以下表單',
+            html: `<h2>親愛的 ${r.name}，</h2><p>請填寫以下課程表單：</p>${linksHtml}`,
+          });
+          sent++;
+        } catch (mailErr) {
+          console.error(`send-form-links email to ${r.email} failed:`, mailErr.message);
+          skipped++;
+        }
+      }
+    } else {
+      const { messagingApi } = require('@line/bot-sdk');
+      const client = new messagingApi.MessagingApiClient({ channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+      for (const r of links) {
+        if (!r.lineUserId || !r.lineUserId.startsWith('U')) { skipped++; continue; }
+        const text = r.links.map((l) => `${l.formName}：${l.url}`).join('\n');
+        try {
+          await client.pushMessage({ to: r.lineUserId, messages: [{ type: 'text', text }] });
+          sent++;
+        } catch (lineErr) {
+          console.error(`send-form-links LINE to ${r.lineUserId} failed:`, lineErr.message);
+          skipped++;
+        }
+      }
+    }
+
+    res.json({ sent, skipped });
+  } catch (err) {
+    console.error('POST /api/admin/send-form-links error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/form-completion — 讀取各表單回應 Sheet，回傳完成矩陣
+app.get('/api/admin/form-completion', requireAdmin, async (req, res) => {
+  const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
+  try {
+    const info = await getEventInfo(eventId);
+    const forms = (info && info.forms) || [];
+    if (forms.length === 0) return res.json({ forms: [], registrants: [] });
+
+    const registrations = await getAllRegistrations(eventId);
+    const errors = [];
+
+    // Read each form's response sheet
+    const emailSets = await Promise.all(
+      forms.map(async (form) => {
+        try {
+          return await getFormResponses(form.responseSheetId, form.responseEmailColumn ?? 1);
+        } catch (err) {
+          errors.push({ formId: form.id, message: 'Unable to access response sheet' });
+          return null;
+        }
+      })
+    );
+
+    const registrants = registrations.map((r) => ({
+      name: r.name,
+      email: r.email,
+      completed: emailSets.map((emailSet) =>
+        emailSet ? emailSet.has((r.email || '').toLowerCase()) : false
+      ),
+    }));
+
+    const result = {
+      forms: forms.map((f) => ({ id: f.id, name: f.name })),
+      registrants,
+    };
+    if (errors.length > 0) result.errors = errors;
+    res.json(result);
+  } catch (err) {
+    console.error('GET /api/admin/form-completion error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
