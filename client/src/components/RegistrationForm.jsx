@@ -27,6 +27,17 @@ function RegistrationForm() {
   const [authProvider, setAuthProvider] = useState('');
   const [authDisplayName, setAuthDisplayName] = useState('');
   const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [fieldConfig, setFieldConfig] = useState({ hints: {}, customFields: [] });
+  const [customValues, setCustomValues] = useState({});
+
+  // Load field config from event
+  useEffect(() => {
+    if (!eventId) return;
+    fetch(`${API_BASE}/api/event?eventId=${eventId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.fieldConfig) setFieldConfig(data.fieldConfig); })
+      .catch(() => {});
+  }, [eventId]);
 
   // Restore auth state and pending registration data after redirect
   useEffect(() => {
@@ -123,6 +134,9 @@ function RegistrationForm() {
     else if (!EMAIL_REGEX.test(form.email)) e.email = 'Email 格式不正確';
     if (!form.phone) e.phone = '請填寫電話';
     if (!form.company) e.company = '請填寫公司';
+    (fieldConfig.customFields || []).forEach((cf) => {
+      if (cf.required && !customValues[cf.id]?.trim()) e[`cf_${cf.id}`] = `請填寫${cf.label}`;
+    });
     return e;
   }
 
@@ -155,6 +169,7 @@ function RegistrationForm() {
         lineUserId: authProvider === 'line' ? authId : '',
         googleId: authProvider === 'google' ? authId : '',
         facebookId: authProvider === 'facebook' ? authId : '',
+        extraFields: customValues,
       };
       const res = await fetch(`${API_BASE}/api/register?eventId=${eventId}`, {
         method: 'POST',
@@ -279,6 +294,28 @@ function RegistrationForm() {
                 onChange={handleChange}
               />
               {errors[id] && <span className="field-error">⚠ {errors[id]}</span>}
+              {!errors[id] && fieldConfig.hints?.[id] && (
+                <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '0.15rem' }}>{fieldConfig.hints[id]}</span>
+              )}
+            </div>
+          ))}
+          {(fieldConfig.customFields || []).map((cf) => (
+            <div className={`field ${errors[`cf_${cf.id}`] ? 'has-error' : customValues[cf.id] ? 'has-value' : ''}`} key={cf.id}>
+              <label htmlFor={`cf_${cf.id}`}>
+                {cf.label}
+                {cf.required && <span style={{ color: '#ef4444', marginLeft: '2px', fontSize: '0.8rem' }}>*</span>}
+              </label>
+              <input
+                id={`cf_${cf.id}`}
+                type="text"
+                value={customValues[cf.id] || ''}
+                placeholder={cf.placeholder || ''}
+                onChange={(e) => setCustomValues((v) => ({ ...v, [cf.id]: e.target.value }))}
+              />
+              {errors[`cf_${cf.id}`] && <span className="field-error">⚠ {errors[`cf_${cf.id}`]}</span>}
+              {!errors[`cf_${cf.id}`] && cf.hint && (
+                <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '0.15rem' }}>{cf.hint}</span>
+              )}
             </div>
           ))}
         </div>

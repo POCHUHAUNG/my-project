@@ -189,6 +189,12 @@ function AdminPage() {
     XLSX.writeFile(wb, `members_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  // Form config state
+  const [formConfig, setFormConfig] = useState({ hints: {}, customFields: [] });
+  const [formConfigSaving, setFormConfigSaving] = useState(false);
+  const [formConfigSaved, setFormConfigSaved] = useState(false);
+  const [newField, setNewField] = useState({ label: '', placeholder: '', hint: '', required: false });
+
   // Notification state
   const [notifType, setNotifType] = useState('update');
   const [notifMessage, setNotifMessage] = useState('');
@@ -222,6 +228,10 @@ function AdminPage() {
         adminLogin(password);
         setMembers(await res.json());
         setAuthed(true);
+        // Load form config
+        fetch(`${API_BASE}/api/event`).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.fieldConfig) setFormConfig(data.fieldConfig);
+        }).catch(() => {});
       } else {
         setError('密碼錯誤');
       }
@@ -342,6 +352,31 @@ function AdminPage() {
       setNotifError('網路錯誤，請稍後再試');
     }
     setNotifSending(false);
+  }
+
+  async function saveFormConfig() {
+    setFormConfigSaving(true);
+    setFormConfigSaved(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/event`, {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ fieldConfig: formConfig }),
+      });
+      if (res.ok) setFormConfigSaved(true);
+    } catch (_) {}
+    setFormConfigSaving(false);
+  }
+
+  function addCustomField() {
+    if (!newField.label.trim()) return;
+    const id = `cf_${Date.now()}`;
+    setFormConfig((c) => ({ ...c, customFields: [...(c.customFields || []), { id, ...newField, label: newField.label.trim() }] }));
+    setNewField({ label: '', placeholder: '', hint: '', required: false });
+  }
+
+  function removeCustomField(id) {
+    setFormConfig((c) => ({ ...c, customFields: (c.customFields || []).filter((f) => f.id !== id) }));
   }
 
   if (!authed) {
@@ -638,6 +673,80 @@ function AdminPage() {
           >
             {notifSending ? '發送中…' : '發送通知'}
           </button>
+        </div>
+
+        {/* 表單設定區塊 */}
+        <div style={{ marginTop: '2rem', padding: '1.2rem', background: '#f5f3ff', borderRadius: '10px', border: '1px solid #c4b5fd' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: '#6d28d9' }}>報名表單設定</h3>
+
+          {/* 標準欄位說明文字 */}
+          <p style={{ fontSize: '0.82rem', color: '#6b7280', margin: '0 0 0.6rem' }}>欄位說明文字（顯示在輸入框下方）</p>
+          {[
+            { id: 'name', label: '姓名' },
+            { id: 'email', label: 'Email' },
+            { id: 'phone', label: '電話' },
+            { id: 'company', label: '公司 / 單位' },
+          ].map(({ id, label }) => (
+            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+              <span style={{ width: '80px', fontSize: '0.85rem', color: '#374151', flexShrink: 0 }}>{label}</span>
+              <input
+                value={formConfig.hints?.[id] || ''}
+                onChange={(e) => setFormConfig((c) => ({ ...c, hints: { ...c.hints, [id]: e.target.value } }))}
+                placeholder={`${label}的說明，例如：若無公司可填家管`}
+                style={{ flex: 1, padding: '0.35rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+              />
+            </div>
+          ))}
+
+          {/* 自訂欄位 */}
+          <p style={{ fontSize: '0.82rem', color: '#6b7280', margin: '1rem 0 0.6rem' }}>自訂欄位</p>
+          {(formConfig.customFields || []).map((cf) => (
+            <div key={cf.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', padding: '0.5rem 0.75rem', background: '#ede9fe', borderRadius: '8px' }}>
+              <span style={{ flex: 1, fontSize: '0.85rem', color: '#4c1d95', fontWeight: 600 }}>{cf.label}</span>
+              {cf.placeholder && <span style={{ fontSize: '0.78rem', color: '#7c3aed' }}>placeholder: {cf.placeholder}</span>}
+              {cf.hint && <span style={{ fontSize: '0.78rem', color: '#7c3aed' }}>說明: {cf.hint}</span>}
+              <span style={{ fontSize: '0.78rem', color: cf.required ? '#dc2626' : '#9ca3af' }}>{cf.required ? '必填' : '選填'}</span>
+              <button onClick={() => removeCustomField(cf.id)} style={{ padding: '0.2rem 0.5rem', background: '#fca5a5', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.78rem', color: '#7f1d1d' }}>刪除</button>
+            </div>
+          ))}
+
+          {/* 新增欄位 */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem', alignItems: 'center' }}>
+            <input
+              value={newField.label}
+              onChange={(e) => setNewField((f) => ({ ...f, label: e.target.value }))}
+              placeholder="欄位名稱 *（如：縣市）"
+              style={{ flex: '1 1 120px', padding: '0.35rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+            />
+            <input
+              value={newField.placeholder}
+              onChange={(e) => setNewField((f) => ({ ...f, placeholder: e.target.value }))}
+              placeholder="placeholder（如：請填縣市）"
+              style={{ flex: '2 1 160px', padding: '0.35rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+            />
+            <input
+              value={newField.hint}
+              onChange={(e) => setNewField((f) => ({ ...f, hint: e.target.value }))}
+              placeholder="說明文字（選填）"
+              style={{ flex: '2 1 160px', padding: '0.35rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+            />
+            <label style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={newField.required} onChange={(e) => setNewField((f) => ({ ...f, required: e.target.checked }))} />
+              必填
+            </label>
+            <button onClick={addCustomField} style={{ padding: '0.35rem 0.8rem', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
+              + 新增
+            </button>
+          </div>
+
+          <button
+            onClick={saveFormConfig}
+            disabled={formConfigSaving}
+            style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', background: '#6d28d9', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+          >
+            {formConfigSaving ? '儲存中…' : '儲存表單設定'}
+          </button>
+          {formConfigSaved && <span style={{ marginLeft: '0.75rem', color: '#15803d', fontSize: '0.85rem' }}>✓ 已儲存</span>}
         </div>
 
         {/* 課前通知區塊 */}

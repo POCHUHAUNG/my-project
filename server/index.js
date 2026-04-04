@@ -75,15 +75,15 @@ app.get('/api/event', async (req, res) => {
   }
 });
 
-// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh）
+// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig）
 app.patch('/api/event', async (req, res) => {
-  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh } = req.body;
+  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig } = req.body;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
-  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined) {
+  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined) {
     return res.status(400).json({ error: 'Provide at least one field to update' });
   }
   try {
-    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh }, eventId);
+    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig }, eventId);
     res.json({ success: true });
   } catch (err) {
     console.error('PATCH /api/event error:', err.message);
@@ -105,7 +105,7 @@ app.get('/api/agenda', async (req, res) => {
 
 // POST /api/register — 寫入報名資料，並自動建立會員帳號
 app.post('/api/register', async (req, res) => {
-  const { name, email, phone, company, lineUserId = '', googleId = '', facebookId = '' } = req.body;
+  const { name, email, phone, company, lineUserId = '', googleId = '', facebookId = '', extraFields = {} } = req.body;
   const authId = lineUserId || googleId || facebookId;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
 
@@ -135,7 +135,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     // 2. Append registration to Sheets
-    await appendRegistration({ name, email, phone, company, lineUserId: authId, memberNumber: member.memberNumber || '' }, eventId);
+    await appendRegistration({ name, email, phone, company, lineUserId: authId, memberNumber: member.memberNumber || '', extraFields }, eventId);
 
     // 3. Try sending emails (non-fatal if fails)
     if (process.env.EMAIL_USER) {

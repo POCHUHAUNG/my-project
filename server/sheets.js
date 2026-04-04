@@ -20,11 +20,14 @@ const spreadsheetId = () => {
 
 const defaultEventId = () => process.env.DEFAULT_EVENT_ID || '001';
 
-async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh }, eventId = defaultEventId()) {
+async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig }, eventId = defaultEventId()) {
   const sheets = getClient();
   const tab = `event-info-${eventId}`;
-  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2' };
-  const args = { imageUrl, dmUrl, agendaTagEn, agendaTagZh };
+  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2' };
+  const args = {
+    imageUrl, dmUrl, agendaTagEn, agendaTagZh,
+    fieldConfig: fieldConfig !== undefined ? JSON.stringify(fieldConfig) : undefined,
+  };
   const requests = Object.entries(args)
     .filter(([, v]) => v !== undefined)
     .map(([key, value]) => sheets.spreadsheets.values.update({
@@ -40,17 +43,20 @@ async function getEventInfo(eventId = defaultEventId()) {
   const sheets = getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
-    range: `event-info-${eventId}!A2:H2`,
+    range: `event-info-${eventId}!A2:I2`,
   });
   const rows = res.data.values;
   if (!rows || rows.length === 0) return null;
-  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh] = rows[0];
+  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr] = rows[0];
+  let fieldConfig = { hints: {}, customFields: [] };
+  try { if (fieldConfigStr) fieldConfig = JSON.parse(fieldConfigStr); } catch {}
   return {
     title, date, location, description,
     imageUrl: imageUrl || '',
     dmUrl: dmUrl || '',
     agendaTagEn: agendaTagEn || 'Schedule',
     agendaTagZh: agendaTagZh || '活動議程',
+    fieldConfig,
   };
 }
 
@@ -70,7 +76,7 @@ async function getAgenda(eventId = defaultEventId()) {
   }));
 }
 
-const REGISTRATION_HEADERS = ['報名時間', '會員編號', '姓名', 'Email', '電話', '公司 / 單位', 'LINE ID', '出席狀態', '報到代碼'];
+const REGISTRATION_HEADERS = ['報名時間', '會員編號', '姓名', 'Email', '電話', '公司 / 單位', 'LINE ID', '出席狀態', '報到代碼', '驗證帳號', '自訂資料'];
 
 function formatTaipeiTime(date) {
   return date.toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).replace('T', ' ');
@@ -80,30 +86,31 @@ async function ensureRegistrationHeaders(sheets, eventId) {
   const tab = `registrations-${eventId}`;
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
-    range: `${tab}!A1:I1`,
+    range: `${tab}!A1:K1`,
   });
   const firstRow = (res.data.values || [])[0] || [];
-  if (firstRow[0] !== REGISTRATION_HEADERS[0] || firstRow[8] !== REGISTRATION_HEADERS[8]) {
+  if (firstRow[0] !== REGISTRATION_HEADERS[0] || firstRow[10] !== REGISTRATION_HEADERS[10]) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: spreadsheetId(),
-      range: `${tab}!A1:I1`,
+      range: `${tab}!A1:K1`,
       valueInputOption: 'RAW',
       requestBody: { values: [REGISTRATION_HEADERS] },
     });
   }
 }
 
-async function appendRegistration({ name, email, phone, company, lineUserId, memberNumber }, eventId = defaultEventId()) {
+async function appendRegistration({ name, email, phone, company, lineUserId, memberNumber, extraFields }, eventId = defaultEventId()) {
   const sheets = getClient();
   await ensureRegistrationHeaders(sheets, eventId);
   const submittedAt = formatTaipeiTime(new Date());
   const checkinToken = randomUUID();
+  const extraStr = extraFields && Object.keys(extraFields).length > 0 ? JSON.stringify(extraFields) : '';
   await sheets.spreadsheets.values.append({
     spreadsheetId: spreadsheetId(),
     range: `registrations-${eventId}!A2`,
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[submittedAt, memberNumber || '', name, email, phone, company, '', '待確認', checkinToken, lineUserId || '']],
+      values: [[submittedAt, memberNumber || '', name, email, phone, company, '', '待確認', checkinToken, lineUserId || '', extraStr]],
     },
   });
   return checkinToken;
