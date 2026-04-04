@@ -11,9 +11,6 @@ server/.env
 client/.env
 .env
 
-# Build output
-client/dist/
-
 # Member data (local only)
 server/data/members.json
 
@@ -24,3 +21,5 @@ server/public/uploads/*
 # OS
 .DS_Store
 Thumbs.db
+
+.vercel
