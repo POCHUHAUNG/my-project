@@ -10,6 +10,7 @@ import SetPasswordPage from './pages/SetPasswordPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AdminPage from './pages/AdminPage';
 import LineCallbackPage from './pages/LineCallbackPage';
+import FacebookCallbackPage from './pages/FacebookCallbackPage';
 import './App.css';
 
 function EventPage() {
@@ -58,6 +59,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/line-callback" element={<LineCallbackPage />} />
+        <Route path="/facebook-callback" element={<FacebookCallbackPage />} />
       </Routes>
     </>
   );

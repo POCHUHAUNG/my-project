@@ -247,13 +247,18 @@ app.post('/api/auth/google/callback', async (req, res) => {
   }
 });
 
-// POST /api/auth/facebook/callback — verify Facebook access token, return facebookId + displayName
+// POST /api/auth/facebook/callback — exchange OAuth code for facebookId + displayName
 app.post('/api/auth/facebook/callback', async (req, res) => {
-  const { accessToken } = req.body;
-  if (!accessToken) return res.status(400).json({ error: 'Missing accessToken' });
+  const { code, redirectUri } = req.body;
+  if (!code || !redirectUri) return res.status(400).json({ error: 'Missing code or redirectUri' });
   try {
-    const profileRes = await fetch(`https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`);
-    if (!profileRes.ok) return res.status(400).json({ error: 'Invalid Facebook token' });
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${encodeURIComponent(process.env.FACEBOOK_APP_ID)}&client_secret=${encodeURIComponent(process.env.FACEBOOK_APP_SECRET)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`
+    );
+    if (!tokenRes.ok) return res.status(400).json({ error: 'Facebook authorization failed' });
+    const { access_token } = await tokenRes.json();
+    const profileRes = await fetch(`https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(access_token)}`);
+    if (!profileRes.ok) return res.status(400).json({ error: 'Facebook authorization failed' });
     const { id, name } = await profileRes.json();
     if (!id) return res.status(400).json({ error: 'Facebook verification failed' });
     res.json({ facebookId: `facebook:${id}`, displayName: name });
