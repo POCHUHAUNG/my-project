@@ -69,7 +69,7 @@ async function getFormResponses(responseSheetId, responseEmailColumn) {
   const sheets = getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: responseSheetId,
-    range: 'Sheet1!A2:Z',
+    range: 'A2:Z',
   });
   const rows = res.data.values || [];
   const emails = new Set();
