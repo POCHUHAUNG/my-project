@@ -250,16 +250,13 @@ app.post('/api/auth/google/callback', async (req, res) => {
 // POST /api/auth/facebook/callback — exchange OAuth code for facebookId + displayName
 app.post('/api/auth/facebook/callback', async (req, res) => {
   const { code, redirectUri } = req.body;
-  console.log('FB callback hit, redirectUri:', redirectUri, 'code length:', code ? code.length : 0);
   if (!code || !redirectUri) return res.status(400).json({ error: 'Missing code or redirectUri' });
   try {
     const tokenRes = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${encodeURIComponent(process.env.FACEBOOK_APP_ID)}&client_secret=${encodeURIComponent(process.env.FACEBOOK_APP_SECRET)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`
     );
-    const tokenData = await tokenRes.json();
-    console.log('FB token response status:', tokenRes.status, 'data:', JSON.stringify(tokenData).slice(0, 200));
     if (!tokenRes.ok) return res.status(400).json({ error: 'Facebook authorization failed' });
-    const { access_token } = tokenData;
+    const { access_token } = await tokenRes.json();
     const profileRes = await fetch(`https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(access_token)}`);
     if (!profileRes.ok) return res.status(400).json({ error: 'Facebook authorization failed' });
     const { id, name } = await profileRes.json();
