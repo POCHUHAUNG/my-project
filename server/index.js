@@ -707,24 +707,19 @@ app.post('/api/admin/send-form-links', requireAdmin, async (req, res) => {
     let skipped = 0;
 
     if (channel === 'email') {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        family: 4,
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-      });
+      const { Resend } = require('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
       for (const r of links) {
         if (!r.email) { skipped++; continue; }
         const linksHtml = r.links.map((l) => `<p><strong>${l.formName}</strong>：<a href="${l.url}">${l.url}</a></p>`).join('');
         try {
-          await transporter.sendMail({
-            from: `"活動報名系統" <${process.env.EMAIL_USER}>`,
+          const { error } = await resend.emails.send({
+            from: '活動報名系統 <onboarding@resend.dev>',
             to: r.email,
             subject: '【課程表單】請填寫以下表單',
             html: `<h2>親愛的 ${r.name}，</h2><p>請填寫以下課程表單：</p>${linksHtml}`,
           });
+          if (error) throw new Error(error.message);
           sent++;
         } catch (mailErr) {
           console.error(`send-form-links email to ${r.email} failed:`, mailErr.message);
