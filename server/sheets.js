@@ -313,33 +313,6 @@ async function patchEventInfoHeaders(eventId = defaultEventId()) {
     valueInputOption: 'RAW',
     requestBody: { values: [EVENT_INFO_HEADERS] },
   });
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const sheetObj = meta.data.sheets.find((s) => s.properties.title === tab);
-  if (!sheetObj) return;
-  const sheetId = sheetObj.properties.sheetId;
-
-  const purple = { red: 0.42, green: 0.18, blue: 0.56 };
-  const white = { red: 1, green: 1, blue: 1 };
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: sid,
-    requestBody: {
-      requests: [{
-        repeatCell: {
-          range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
-          cell: {
-            userEnteredFormat: {
-              backgroundColor: purple,
-              textFormat: { bold: true, foregroundColor: white, fontSize: 10 },
-              horizontalAlignment: 'CENTER',
-              verticalAlignment: 'MIDDLE',
-            },
-          },
-          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
-        },
-      }],
-    },
-  });
 }
 
 module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses, patchEventInfoHeaders };
