@@ -77,15 +77,15 @@ app.get('/api/event', async (req, res) => {
   }
 });
 
-// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig / forms / youtubeUrl）
+// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig / forms / youtubeVideos）
 app.patch('/api/event', async (req, res) => {
-  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl } = req.body;
+  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeVideos } = req.body;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
-  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined && forms === undefined && youtubeUrl === undefined) {
+  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined && forms === undefined && youtubeVideos === undefined) {
     return res.status(400).json({ error: 'Provide at least one field to update' });
   }
   try {
-    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl }, eventId);
+    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeVideos }, eventId);
     res.json({ success: true });
   } catch (err) {
     console.error('PATCH /api/event error:', err.message);

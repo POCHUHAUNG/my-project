@@ -20,15 +20,15 @@ const spreadsheetId = () => {
 
 const defaultEventId = () => process.env.DEFAULT_EVENT_ID || '001';
 
-async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl }, eventId = defaultEventId()) {
+async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeVideos }, eventId = defaultEventId()) {
   const sheets = getClient();
   const tab = `event-info-${eventId}`;
-  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2', forms: 'J2', youtubeUrl: 'K2' };
+  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2', forms: 'J2', youtubeVideos: 'K2' };
   const args = {
     imageUrl, dmUrl, agendaTagEn, agendaTagZh,
     fieldConfig: fieldConfig !== undefined ? JSON.stringify(fieldConfig) : undefined,
     forms: forms !== undefined ? JSON.stringify(forms) : undefined,
-    youtubeUrl,
+    youtubeVideos: youtubeVideos !== undefined ? JSON.stringify(youtubeVideos) : undefined,
   };
   const requests = Object.entries(args)
     .filter(([, v]) => v !== undefined)
@@ -49,12 +49,28 @@ async function getEventInfo(eventId = defaultEventId()) {
   });
   const rows = res.data.values;
   if (!rows || rows.length === 0) return null;
-  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr, formsStr, youtubeUrl] = rows[0];
+  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr, formsStr, youtubeVideosStr] = rows[0];
   let fieldConfig = { hints: {}, customFields: [] };
   try { if (fieldConfigStr) fieldConfig = JSON.parse(fieldConfigStr); } catch {}
   let forms = [];
   try { if (formsStr) forms = JSON.parse(formsStr); } catch {}
   if (!Array.isArray(forms)) forms = [];
+  let youtubeVideos = [];
+  try {
+    if (youtubeVideosStr) {
+      const parsed = JSON.parse(youtubeVideosStr);
+      if (Array.isArray(parsed)) {
+        youtubeVideos = parsed;
+      } else if (typeof parsed === 'string' && parsed) {
+        youtubeVideos = [{ url: parsed, title: '' }];
+      }
+    }
+  } catch {
+    // backward compat: old value was a plain URL string (not JSON)
+    if (youtubeVideosStr && typeof youtubeVideosStr === 'string') {
+      youtubeVideos = [{ url: youtubeVideosStr, title: '' }];
+    }
+  }
   return {
     title, date, location, description,
     imageUrl: imageUrl || '',
@@ -63,7 +79,7 @@ async function getEventInfo(eventId = defaultEventId()) {
     agendaTagZh: agendaTagZh || '活動議程',
     fieldConfig,
     forms,
-    youtubeUrl: youtubeUrl || '',
+    youtubeVideos,
   };
 }
 

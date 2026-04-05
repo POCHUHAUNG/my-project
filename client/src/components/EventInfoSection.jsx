@@ -20,6 +20,111 @@ function ImageUploadPersist({ label, currentUrl, onUploaded }) {
   );
 }
 
+function extractYouTubeEmbedUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    let videoId = null;
+    if (u.hostname === 'youtu.be') {
+      videoId = u.pathname.slice(1);
+    } else if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com') {
+      videoId = u.searchParams.get('v');
+    }
+    if (!videoId || !/^[\w-]{11}$/.test(videoId)) return null;
+    return `https://www.youtube.com/embed/${videoId}`;
+  } catch {
+    return null;
+  }
+}
+
+function YouTubeListEditor({ videos, onSave }) {
+  const [list, setList] = useState(videos || []);
+  const [newUrl, setNewUrl] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function persist(nextList) {
+    setSaving(true);
+    await onSave(nextList);
+    setSaving(false);
+  }
+
+  function move(index, dir) {
+    const next = [...list];
+    const swap = index + dir;
+    if (swap < 0 || swap >= next.length) return;
+    [next[index], next[swap]] = [next[swap], next[index]];
+    setList(next);
+    persist(next);
+  }
+
+  function remove(index) {
+    const next = list.filter((_, i) => i !== index);
+    setList(next);
+    persist(next);
+  }
+
+  function add() {
+    const url = newUrl.trim();
+    if (!url || list.length >= 10) return;
+    const next = [...list, { url, title: newTitle.trim() }];
+    setList(next);
+    setNewUrl('');
+    setNewTitle('');
+    persist(next);
+  }
+
+  const atLimit = list.length >= 10;
+
+  return (
+    <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#f5f3ff', borderRadius: '10px' }}>
+      <div style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: '0.5rem', fontWeight: 600 }}>
+        YouTube 影片清單（最多 10 支）
+      </div>
+      {list.length === 0 && (
+        <div style={{ fontSize: '0.82rem', color: '#9ca3af', marginBottom: '0.5rem' }}>尚未新增任何影片</div>
+      )}
+      {list.map((item, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+          <span style={{ flex: 1, minWidth: '120px', fontSize: '0.8rem', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.title ? <strong>{item.title}</strong> : <em style={{ color: '#9ca3af' }}>無標題</em>}
+            <span style={{ color: '#9ca3af', marginLeft: '0.3rem' }}>{item.url}</span>
+          </span>
+          <button onClick={() => move(i, -1)} disabled={i === 0 || saving} style={btnStyle}>↑</button>
+          <button onClick={() => move(i, 1)} disabled={i === list.length - 1 || saving} style={btnStyle}>↓</button>
+          <button onClick={() => remove(i)} disabled={saving} style={{ ...btnStyle, color: '#ef4444' }}>🗑</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.6rem', alignItems: 'center' }}>
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="標題（選填）"
+          disabled={atLimit}
+          style={{ width: '120px', padding: '0.4rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+        />
+        <input
+          value={newUrl}
+          onChange={(e) => setNewUrl(e.target.value)}
+          placeholder="YouTube 網址"
+          disabled={atLimit}
+          style={{ flex: 1, minWidth: '160px', padding: '0.4rem 0.6rem', border: '1.5px solid #c4b5fd', borderRadius: '6px', fontSize: '0.82rem' }}
+        />
+        <button
+          onClick={add}
+          disabled={atLimit || saving || !newUrl.trim()}
+          style={{ padding: '0.4rem 0.9rem', background: atLimit ? '#e5e7eb' : '#6366f1', color: atLimit ? '#9ca3af' : '#fff', border: 'none', borderRadius: '6px', cursor: atLimit ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 700 }}
+        >
+          新增
+        </button>
+        {atLimit && <span style={{ fontSize: '0.78rem', color: '#ef4444' }}>已達上限 10 支</span>}
+      </div>
+    </div>
+  );
+}
+
+const btnStyle = { padding: '0.2rem 0.45rem', background: 'none', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', color: '#6366f1' };
+
 function AgendaLabelEditor({ tagEn, tagZh, onSave }) {
   const [open, setOpen] = useState(false);
   const [en, setEn] = useState(tagEn);
@@ -161,6 +266,42 @@ function EventInfoSection() {
           <img src={event.dmUrl} alt="課程 DM" className="dm-image" />
         </section>
       )}
+
+      {isAdmin && (
+        <section className="dm-section">
+          <YouTubeListEditor
+            videos={event.youtubeVideos || []}
+            onSave={async (youtubeVideos) => {
+              setEvent((p) => ({ ...p, youtubeVideos }));
+              await fetch(`${API_BASE}/api/event?eventId=${eventId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ youtubeVideos }),
+              });
+            }}
+          />
+        </section>
+      )}
+
+      {(event.youtubeVideos || []).map((item, i) => {
+        const embedUrl = extractYouTubeEmbedUrl(item.url);
+        if (!embedUrl) return null;
+        return (
+          <section key={i} className="dm-section">
+            {item.title && <h3 style={{ marginBottom: '0.5rem', fontSize: '1rem', color: '#374151' }}>{item.title}</h3>}
+            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: '8px', overflow: 'hidden' }}>
+              <iframe
+                src={embedUrl}
+                title={item.title || `YouTube 影片 ${i + 1}`}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+              />
+            </div>
+          </section>
+        );
+      })}
     </>
   );
 }

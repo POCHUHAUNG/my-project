@@ -23,7 +23,7 @@ function EventPage() {
   );
 }
 
-function ScrollToTop() {
+function ScrollNav() {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const onScroll = () => setVisible(window.scrollY > 300);
@@ -31,18 +31,18 @@ function ScrollToTop() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
   if (!visible) return null;
+  const btnStyle = {
+    width: '44px', height: '44px', borderRadius: '50%',
+    background: '#6c63ff', color: '#fff', border: 'none',
+    fontSize: '1.2rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(108,99,255,0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
   return (
-    <button
-      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      style={{
-        position: 'fixed', bottom: '2rem', right: '1.5rem', zIndex: 999,
-        width: '44px', height: '44px', borderRadius: '50%',
-        background: '#6c63ff', color: '#fff', border: 'none',
-        fontSize: '1.2rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(108,99,255,0.4)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-      title="回到頂部"
-    >↑</button>
+    <div style={{ position: 'fixed', bottom: '2rem', right: '1.5rem', zIndex: 999, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={btnStyle} title="回到頂部">↑</button>
+      <button onClick={() => window.scrollTo({ top: document.body.scrollHeight / 2, behavior: 'smooth' })} style={btnStyle} title="置中">↕</button>
+      <button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })} style={btnStyle} title="到底部">↓</button>
+    </div>
   );
 }
 
@@ -50,7 +50,7 @@ function App() {
   return (
     <>
       <MemberStatus />
-      <ScrollToTop />
+      <ScrollNav />
       <Routes>
         <Route path="/" element={<EventPage />} />
         <Route path="/login" element={<LoginPage />} />

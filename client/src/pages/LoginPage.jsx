@@ -75,6 +75,9 @@ function LoginPage() {
         <p style={{ textAlign: 'center', marginTop: '0.5rem' }}>
           <Link to="/forgot-password" style={{ color: '#6366f1', fontSize: '0.85rem' }}>忘記密碼？</Link>
         </p>
+        <p style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+          <Link to="/" style={{ color: '#9ca3af', fontSize: '0.85rem' }}>← 回報名頁</Link>
+        </p>
       </section>
     </div>
   );

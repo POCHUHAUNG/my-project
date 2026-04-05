@@ -3,7 +3,9 @@ import { createContext, useContext, useState } from 'react';
 const AdminContext = createContext(null);
 
 export function AdminProvider({ children }) {
-  const [isAdmin, setIsAdmin] = useState(!!localStorage.getItem('adminPw'));
+  // isAdmin is session-only: resets on page refresh
+  // localStorage only used to pre-fill the password input
+  const [isAdmin, setIsAdmin] = useState(false);
 
   function login(password) {
     localStorage.setItem('adminPw', password);

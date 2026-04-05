@@ -25,7 +25,7 @@ function LineCallbackPage() {
       .then(({ lineUserId, displayName }) => {
         sessionStorage.setItem('lineUserId', lineUserId);
         sessionStorage.setItem('lineDisplayName', displayName || '');
-        window.location.href = '/register';
+        window.location.href = '/';
       })
       .catch(() => setError('LINE 授權失敗，請關閉此頁並重新嘗試。'));
   }, []);
