@@ -18,7 +18,7 @@ function getLocalIP() {
   }
   return 'localhost';
 }
-const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses } = require('./sheets');
+const { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses, patchEventInfoHeaders } = require('./sheets');
 const memberStore = require('./memberStore');
 const { signToken, requireAuth } = require('./auth');
 
@@ -77,19 +77,31 @@ app.get('/api/event', async (req, res) => {
   }
 });
 
-// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig / forms）
+// PATCH /api/event — 更新活動欄位（imageUrl / dmUrl / agendaTagEn / agendaTagZh / fieldConfig / forms / youtubeUrl）
 app.patch('/api/event', async (req, res) => {
-  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms } = req.body;
+  const { imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl } = req.body;
   const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
-  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined && forms === undefined) {
+  if (imageUrl === undefined && dmUrl === undefined && agendaTagEn === undefined && agendaTagZh === undefined && fieldConfig === undefined && forms === undefined && youtubeUrl === undefined) {
     return res.status(400).json({ error: 'Provide at least one field to update' });
   }
   try {
-    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms }, eventId);
+    await updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl }, eventId);
     res.json({ success: true });
   } catch (err) {
     console.error('PATCH /api/event error:', err.message);
     res.status(500).json({ error: 'Failed to update event info' });
+  }
+});
+
+// POST /api/admin/patch-event-headers — 補齊 event-info 分頁標題列（含紫色背景）
+app.post('/api/admin/patch-event-headers', async (req, res) => {
+  const eventId = req.query.eventId || process.env.DEFAULT_EVENT_ID || '001';
+  try {
+    await patchEventInfoHeaders(eventId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('PATCH event headers error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

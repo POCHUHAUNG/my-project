@@ -20,14 +20,15 @@ const spreadsheetId = () => {
 
 const defaultEventId = () => process.env.DEFAULT_EVENT_ID || '001';
 
-async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms }, eventId = defaultEventId()) {
+async function updateEventImages({ imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfig, forms, youtubeUrl }, eventId = defaultEventId()) {
   const sheets = getClient();
   const tab = `event-info-${eventId}`;
-  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2', forms: 'J2' };
+  const fieldMap = { imageUrl: 'E2', dmUrl: 'F2', agendaTagEn: 'G2', agendaTagZh: 'H2', fieldConfig: 'I2', forms: 'J2', youtubeUrl: 'K2' };
   const args = {
     imageUrl, dmUrl, agendaTagEn, agendaTagZh,
     fieldConfig: fieldConfig !== undefined ? JSON.stringify(fieldConfig) : undefined,
     forms: forms !== undefined ? JSON.stringify(forms) : undefined,
+    youtubeUrl,
   };
   const requests = Object.entries(args)
     .filter(([, v]) => v !== undefined)
@@ -44,11 +45,11 @@ async function getEventInfo(eventId = defaultEventId()) {
   const sheets = getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
-    range: `event-info-${eventId}!A2:J2`,
+    range: `event-info-${eventId}!A2:K2`,
   });
   const rows = res.data.values;
   if (!rows || rows.length === 0) return null;
-  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr, formsStr] = rows[0];
+  const [title, date, location, description, imageUrl, dmUrl, agendaTagEn, agendaTagZh, fieldConfigStr, formsStr, youtubeUrl] = rows[0];
   let fieldConfig = { hints: {}, customFields: [] };
   try { if (fieldConfigStr) fieldConfig = JSON.parse(fieldConfigStr); } catch {}
   let forms = [];
@@ -62,6 +63,7 @@ async function getEventInfo(eventId = defaultEventId()) {
     agendaTagZh: agendaTagZh || '活動議程',
     fieldConfig,
     forms,
+    youtubeUrl: youtubeUrl || '',
   };
 }
 
@@ -214,7 +216,7 @@ async function markAttended(token, eventId = defaultEventId()) {
   return { name: rows[rowIndex][2], email: rows[rowIndex][3], company: rows[rowIndex][5] };
 }
 
-const EVENT_INFO_HEADERS = ['活動名稱', '日期', '地點', '說明', '主視覺圖片 URL', '課程 DM URL', '議程英文標籤', '議程中文標題'];
+const EVENT_INFO_HEADERS = ['活動名稱', '日期', '地點', '說明', '主視覺圖片 URL', '課程 DM URL', '議程英文標籤', '議程中文標題', '欄位設定', '表單設定', 'YouTube 影片 URL'];
 const AGENDA_HEADERS = ['時間', '主題', '講者', '說明', '場次'];
 
 async function initializeSheets(eventId = defaultEventId()) {
@@ -255,7 +257,7 @@ async function initializeSheets(eventId = defaultEventId()) {
     requestBody: {
       valueInputOption: 'RAW',
       data: [
-        { range: `${eventInfoTab}!A1:H1`, values: [EVENT_INFO_HEADERS] },
+        { range: `${eventInfoTab}!A1:K1`, values: [EVENT_INFO_HEADERS] },
         { range: `${agendaTab}!A1:E1`, values: [AGENDA_HEADERS] },
         { range: `${registrationsTab}!A1:I1`, values: [REGISTRATION_HEADERS] },
       ],
@@ -266,7 +268,7 @@ async function initializeSheets(eventId = defaultEventId()) {
   const purple = { red: 0.42, green: 0.18, blue: 0.56 };
   const white = { red: 1, green: 1, blue: 1 };
   const sheetDefs = [
-    { title: eventInfoTab, cols: 8 },
+    { title: eventInfoTab, cols: 11 },
     { title: agendaTab, cols: 5 },
     { title: registrationsTab, cols: 9 },
   ];
@@ -300,4 +302,44 @@ async function initializeSheets(eventId = defaultEventId()) {
   await sheets.spreadsheets.batchUpdate({ spreadsheetId: sid, requestBody: { requests } });
 }
 
-module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses };
+async function patchEventInfoHeaders(eventId = defaultEventId()) {
+  const sheets = getClient();
+  const sid = spreadsheetId();
+  const tab = `event-info-${eventId}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sid,
+    range: `${tab}!A1:K1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [EVENT_INFO_HEADERS] },
+  });
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
+  const sheetObj = meta.data.sheets.find((s) => s.properties.title === tab);
+  if (!sheetObj) return;
+  const sheetId = sheetObj.properties.sheetId;
+
+  const purple = { red: 0.42, green: 0.18, blue: 0.56 };
+  const white = { red: 1, green: 1, blue: 1 };
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sid,
+    requestBody: {
+      requests: [{
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: purple,
+              textFormat: { bold: true, foregroundColor: white, fontSize: 10 },
+              horizontalAlignment: 'CENTER',
+              verticalAlignment: 'MIDDLE',
+            },
+          },
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+        },
+      }],
+    },
+  });
+}
+
+module.exports = { getEventInfo, getAgenda, appendRegistration, getRegistrationsByEmail, getAllRegistrations, updateEventImages, markAttended, getRegistrationByToken, initializeSheets, getFormResponses, patchEventInfoHeaders };
